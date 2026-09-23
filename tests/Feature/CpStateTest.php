@@ -28,7 +28,9 @@ beforeEach(function () {
     $this->suggested = $this->makeSong('Vorschlag', ['https://www.deezer.com/track/2']);
     $this->fine = $this->makeSong('Gut', ['https://www.deezer.com/track/3']);
 
-    app(LinkStatus::class)->record((string) $this->dead->id(), 'https://play.napster.com/track/tra.1', LinkStatus::DEAD, null);
+    // Two dead checks in a row: confirmed.
+    app(LinkStatus::class)->record((string) $this->dead->id(), 'https://play.napster.com/track/tra.1', LinkStatus::DEAD, 404);
+    app(LinkStatus::class)->record((string) $this->dead->id(), 'https://play.napster.com/track/tra.1', LinkStatus::DEAD, 404);
     app(Suggestions::class)->add((string) $this->suggested->id(), 'youtube', 'https://www.youtube.com/watch?v=yG4VfxlXbIc');
 });
 
