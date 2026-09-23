@@ -75,7 +75,7 @@ class ServiceProvider extends AddonServiceProvider
     protected function bootCommands(): self
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([Console\Commands\Resolve::class]);
+            $this->commands([Console\Commands\Resolve::class, Console\Commands\Prune::class]);
         }
 
         return $this;

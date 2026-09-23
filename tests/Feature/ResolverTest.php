@@ -59,6 +59,32 @@ it('reports Spotify without credentials as not configured, without a request', f
     Http::assertNothingSent();
 });
 
+it('retries once with a fresh token after a 401, and gives up after the second', function () {
+    fakeSpotify();
+    Http::fake([
+        'accounts.spotify.com/*' => Http::sequence()
+            ->push(['access_token' => 'stale', 'expires_in' => 3600])
+            ->push(['access_token' => 'fresh', 'expires_in' => 3600])
+            ->push(['access_token' => 'fresh2', 'expires_in' => 3600])
+            ->push(['access_token' => 'fresh3', 'expires_in' => 3600]),
+        'api.spotify.com/*' => Http::sequence()
+            ->push(['error' => ['status' => 401]], 401)
+            ->push(['name' => 'X', 'artists' => [['name' => 'A']], 'external_ids' => ['isrc' => 'DEA912300001']])
+            ->push(['error' => ['status' => 401]], 401)
+            ->push(['error' => ['status' => 401]], 401),
+    ]);
+
+    $track = new Track(spotifyId: SPOTIFY_ID);
+    expect(app(SpotifyClient::class)->enrich($track))->toBe(Resolution::FOUND)
+        ->and($track->isrc)->toBe('DEA912300001');
+    Http::assertSent(fn (Request $r) => str_contains($r->url(), 'api.spotify.com') && $r->hasHeader('Authorization', 'Bearer fresh'));
+
+    // Cached "fresh" is rejected, the retry's "fresh2" too: one retry, then an error.
+    expect(app(SpotifyClient::class)->enrich(new Track(spotifyId: SPOTIFY_ID)))->toBe(Resolution::HTTP_ERROR);
+    // First call: token, 401, token, 200. Second: 401 (cached), token, 401.
+    Http::assertSentCount(7);
+});
+
 it('reports a rejected Spotify token as an HTTP error', function () {
     fakeSpotify();
     Http::fake(['accounts.spotify.com/*' => Http::response(['error' => 'invalid_client'], 400)]);

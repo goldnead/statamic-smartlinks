@@ -42,7 +42,7 @@ class ResolverChain
     public function trackFor(Entry $entry): Track
     {
         $spotifyField = config('smartlinks.spotify_field');
-        $spotifyId = $spotifyField ? Track::spotifyIdFrom(is_string($value = $entry->get($spotifyField)) ? $value : null) : null;
+        $spotifyId = $spotifyField ? Track::spotifyIdFrom(is_string($value = $entry->value($spotifyField)) ? $value : null) : null;
 
         if ($spotifyId === null) {
             $spotifyId = $this->smartlinks->url($entry, 'spotify');
@@ -50,7 +50,7 @@ class ResolverChain
         }
 
         $isrcField = config('smartlinks.isrc_field');
-        $isrc = $isrcField && is_string($value = $entry->get($isrcField)) ? $value : null;
+        $isrc = $isrcField && is_string($value = $entry->value($isrcField)) ? $value : null;
 
         return new Track(spotifyId: $spotifyId, isrc: $isrc, title: null, artist: null);
     }
@@ -117,14 +117,38 @@ class ResolverChain
         if ($added !== [] && ! $dryRun) {
             $field = (string) config('smartlinks.field', 'streaming_links');
             $key = (string) config('smartlinks.url_key', 'url');
-            $rows = is_array($current = $entry->get($field)) ? array_values($current) : [];
+            $platformKey = config('smartlinks.platform_key', 'platform');
+            $asLabel = config('smartlinks.platform_value', 'handle') === 'label';
+
+            // Write where the links live: a localisation that inherits them
+            // gets them added on its origin, not a copy that ends inheritance.
+            $target = $entry;
+            while (! $target->has($field) && $target->origin() instanceof Entry) {
+                $target = $target->origin();
+            }
+
+            $rows = is_array($current = $target->get($field)) ? array_values($current) : [];
             $isList = $rows !== [] && collect($rows)->every(fn ($row) => is_string($row));
 
             foreach ($added as $result) {
-                $rows[] = $isList ? $result->url : [$key => $result->url];
+                if ($isList) {
+                    $rows[] = $result->url;
+
+                    continue;
+                }
+
+                $row = [$key => $result->url];
+
+                if (is_string($platformKey) && $platformKey !== '') {
+                    $row[$platformKey] = $asLabel
+                        ? $this->smartlinks->platforms()->label($result->platform)
+                        : $result->platform;
+                }
+
+                $rows[] = $row;
             }
 
-            $entry->set($field, $rows)->save();
+            $target->set($field, $rows)->save();
         }
 
         return [...$run, 'added' => $added];

@@ -3,6 +3,7 @@
 namespace Goldnead\Smartlinks\Resolvers;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -39,19 +40,23 @@ class SpotifyClient
         }
 
         try {
-            $token = $this->token();
+            $response = $this->fetchTrack($track->spotifyId);
 
-            if ($token === null) {
-                return Resolution::HTTP_ERROR;
+            // A cached token can die before its expiry (revoked, rotated
+            // secret). Forget it and try once more with a fresh one.
+            if ($response?->status() === 401) {
+                Cache::forget($this->cacheKey());
+                $response = $this->fetchTrack($track->spotifyId);
+
+                if ($response?->status() === 401) {
+                    Cache::forget($this->cacheKey());
+                }
             }
-
-            $response = Http::withToken($token)
-                ->timeout((int) config('smartlinks.services.timeout', 10))
-                ->acceptJson()
-                ->get(self::API_URL.'/tracks/'.$track->spotifyId, array_filter([
-                    'market' => config('smartlinks.services.spotify.market'),
-                ]));
         } catch (ConnectionException) {
+            return Resolution::HTTP_ERROR;
+        }
+
+        if ($response === null) {
             return Resolution::HTTP_ERROR;
         }
 
@@ -60,10 +65,6 @@ class SpotifyClient
         }
 
         if (! $response->successful()) {
-            if ($response->status() === 401) {
-                Cache::forget($this->cacheKey());
-            }
-
             return Resolution::HTTP_ERROR;
         }
 
@@ -72,6 +73,25 @@ class SpotifyClient
         $track->artist ??= $response->json('artists.0.name');
 
         return Resolution::FOUND;
+    }
+
+    /**
+     * The track, or null when no token could be had.
+     */
+    protected function fetchTrack(string $id): ?Response
+    {
+        $token = $this->token();
+
+        if ($token === null) {
+            return null;
+        }
+
+        return Http::withToken($token)
+            ->timeout((int) config('smartlinks.services.timeout', 10))
+            ->acceptJson()
+            ->get(self::API_URL.'/tracks/'.$id, array_filter([
+                'market' => config('smartlinks.services.spotify.market'),
+            ]));
     }
 
     /**
