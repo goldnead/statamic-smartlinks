@@ -19,7 +19,7 @@ parameters:
             path: config/smartlinks.php
 
         # Core's Entries\QueryBuilder contract is an empty marker interface;
-        # every implementation (Stache and the Eloquent driver) has whereIn().
+        # every implementation (Stache and the Eloquent driver) has where()/whereIn().
         -
-            message: '#^Call to an undefined method Statamic\\Contracts\\Entries\\QueryBuilder::whereIn\(\)\.$#'
+            message: '#^Call to an undefined method Statamic\\Contracts\\Entries\\QueryBuilder::where(In)?\(\)\.$#'
             identifier: method.notFound
