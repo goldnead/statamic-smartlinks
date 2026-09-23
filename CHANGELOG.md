@@ -42,6 +42,11 @@
 - A suggested platform is not searched again after its suggestion was rejected; accepting a
   suggestion for a platform that has a link meanwhile drops it (`superseded`).
 - Tidal accepts only an item with exactly the asked ISRC or UPC.
+- Cleanup also strips `refer`, `ref`, `ref_src` and common ad/newsletter click IDs
+  (`msclkid`, `ttclid`, `mc_cid`, …).
+- CP: the listing reloads its rows after accept/reject; each suggestion in the row menu is
+  headed by its target (`youtube.com/watch?v=…`); "Edit" and the title link only for users
+  who may edit the entry.
 - `release_collections` are part of `Smartlinks::collections()`.
 
 ## 0.1.0 (2026-09-23)

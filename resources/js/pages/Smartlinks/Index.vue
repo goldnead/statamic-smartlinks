@@ -1,6 +1,18 @@
 <script setup>
+import { ref } from 'vue';
 import { Head, router } from '@statamic/cms/inertia';
-import { Badge, Description, DropdownItem, EmptyStateItem, EmptyStateMenu, Header, Icon, Listing } from '@statamic/cms/ui';
+import {
+    Badge,
+    Description,
+    DropdownItem,
+    DropdownLabel,
+    DropdownSeparator,
+    EmptyStateItem,
+    EmptyStateMenu,
+    Header,
+    Icon,
+    Listing,
+} from '@statamic/cms/ui';
 
 defineProps({
     setupRequired: { type: Boolean, default: false },
@@ -13,9 +25,16 @@ defineProps({
 
 const docsUrl = 'https://docs.adriangoldner.dev/smartlinks/';
 
-// Accept/reject redirect back to this page, which remounts the listing.
+const listing = ref(null);
+
+// Accept/reject answer with a redirect to this page (for the toast). Inertia
+// keeps the page component, so the listing's rows would stay stale: refresh
+// them, as core listings do after an action.
 function post(url) {
-    router.post(url, {}, { preserveScroll: true });
+    router.post(url, {}, {
+        preserveScroll: true,
+        onSuccess: () => listing.value?.refresh(),
+    });
 }
 </script>
 
@@ -59,6 +78,7 @@ function post(url) {
 
             <!-- Server mode, like core's Entries: paginator footer ("1–3 of 3"), per-page, search. -->
             <Listing
+                ref="listing"
                 :url="listingUrl"
                 :columns="initialColumns"
                 :filters="filters"
@@ -74,7 +94,8 @@ function post(url) {
                          Inline style: the bundle ships no CSS, so only classes core's own
                          stylesheet already contains would apply. -->
                     <div style="min-width: 7rem">
-                        <a :href="row.edit_url" class="title-index-field">{{ row.title }}</a>
+                        <a v-if="row.edit_url" :href="row.edit_url" class="title-index-field">{{ row.title }}</a>
+                        <span v-else class="title-index-field">{{ row.title }}</span>
                         <!-- State in the title cell, like core's status dot: no extra column on a phone. -->
                         <div v-if="row.dead || row.suggestions" class="mt-1 flex flex-wrap gap-1">
                             <Badge v-if="row.dead" size="sm" pill color="red" :text="__('smartlinks::cp.badge_dead', { count: row.dead })" />
@@ -84,28 +105,31 @@ function post(url) {
                 </template>
 
                 <template #prepended-row-actions="{ row }">
+                    <!-- One group per suggestion, headed by its target, so two of one platform differ. -->
                     <template v-for="suggestion in row.suggestion_items" :key="suggestion.id">
+                        <DropdownLabel :text="__('smartlinks::cp.suggestion_label', { platform: suggestion.label, target: suggestion.target })" />
                         <DropdownItem
-                            :text="__('smartlinks::cp.suggestion_view', { platform: suggestion.label })"
+                            :text="__('smartlinks::cp.suggestion_view')"
                             icon="external-link"
                             :href="suggestion.url"
                             target="_blank"
                         />
                         <DropdownItem
                             v-if="suggestion.accept_url"
-                            :text="__('smartlinks::cp.suggestion_accept', { platform: suggestion.label })"
+                            :text="__('smartlinks::cp.suggestion_accept')"
                             icon="checkmark"
                             @click="post(suggestion.accept_url)"
                         />
                         <DropdownItem
                             v-if="suggestion.reject_url"
-                            :text="__('smartlinks::cp.suggestion_reject', { platform: suggestion.label })"
+                            :text="__('smartlinks::cp.suggestion_reject')"
                             icon="x"
                             variant="destructive"
                             @click="post(suggestion.reject_url)"
                         />
+                        <DropdownSeparator />
                     </template>
-                    <DropdownItem :text="__('smartlinks::cp.edit')" icon="edit" :href="row.edit_url" />
+                    <DropdownItem v-if="row.edit_url" :text="__('smartlinks::cp.edit')" icon="edit" :href="row.edit_url" />
                     <DropdownItem
                         v-if="row.landing_url"
                         :text="__('smartlinks::cp.open_page')"

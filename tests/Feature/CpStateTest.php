@@ -87,6 +87,26 @@ it('accepts a suggestion into the links, and rejects one for good', function () 
         ->and(Entry::find($this->fine->id())->get('streaming_links'))->toHaveCount(1);
 });
 
+it('names the target of each suggestion, so two of one platform can be told apart', function () {
+    app(Suggestions::class)->add((string) $this->suggested->id(), 'youtube', 'https://www.youtube.com/watch?v=CCCCCCCCCCC');
+
+    $row = collect($this->actingAs(stateUser(['view smartlinks', 'manage smartlinks']))->getJson('/cp/smartlinks/listing')->json('data'))
+        ->firstWhere('title', 'Vorschlag');
+
+    expect(array_column($row['suggestion_items'], 'target'))->toBe(['youtube.com/watch?v=yG4VfxlXbIc', 'youtube.com/watch?v=CCCCCCCCCCC']);
+});
+
+it('offers editing only to users who may edit the entry', function () {
+    $viewer = stateUser(['view smartlinks']);
+    $editor = stateUser(['view smartlinks', 'view songs entries', 'edit songs entries']);
+
+    $forViewer = collect($this->actingAs($viewer)->getJson('/cp/smartlinks/listing')->json('data'))->firstWhere('title', 'Gut');
+    $forEditor = collect($this->actingAs($editor)->getJson('/cp/smartlinks/listing')->json('data'))->firstWhere('title', 'Gut');
+
+    expect($forViewer['edit_url'])->toBeNull()
+        ->and($forEditor['edit_url'])->toEndWith('/cp/collections/songs/entries/'.$this->fine->id());
+});
+
 it('drops a suggestion instead of adding a second link when the platform got one meanwhile', function () {
     $user = stateUser(['view smartlinks', 'manage smartlinks']);
     $id = app(Suggestions::class)->pending((string) $this->suggested->id())[0]->id;

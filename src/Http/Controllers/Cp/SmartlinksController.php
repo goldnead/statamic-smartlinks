@@ -138,6 +138,7 @@ class SmartlinksController extends CpController
                 'platform' => (string) $s->platform,
                 'label' => $smartlinks->platforms()->label((string) $s->platform),
                 'url' => (string) $s->url,
+                'target' => $this->target((string) $s->url),
                 'accept_url' => $canManage ? cp_route('smartlinks.suggestions.accept', $s->id) : null,
                 'reject_url' => $canManage ? cp_route('smartlinks.suggestions.reject', $s->id) : null,
             ])->values()->all();
@@ -145,7 +146,8 @@ class SmartlinksController extends CpController
             $row = [
                 'id' => $id,
                 'title' => (string) $entry->value('title'),
-                'edit_url' => $entry->editUrl(),
+                // Only for who may edit it; the link would redirect everyone else.
+                'edit_url' => Gate::allows('edit', $entry) ? $entry->editUrl() : null,
                 'landing_url' => $smartlinks->landingUrl($entry),
                 'links' => count($smartlinks->links($entry)),
                 'dead' => $dead[$id] ?? 0,
@@ -205,6 +207,21 @@ class SmartlinksController extends CpController
                 'total' => $paginator->total(),
             ],
         ]);
+    }
+
+    /**
+     * What a suggestion points to, short: host without `www.`, path and
+     * query, at most 40 characters. Tells two suggestions of one platform
+     * apart in the row menu.
+     */
+    protected function target(string $url): string
+    {
+        $parts = parse_url($url);
+        $target = preg_replace('/^www\./', '', (string) ($parts['host'] ?? ''))
+            .($parts['path'] ?? '')
+            .(isset($parts['query']) ? '?'.$parts['query'] : '');
+
+        return mb_strimwidth($target, 0, 40, '…');
     }
 
     protected function days(): int
