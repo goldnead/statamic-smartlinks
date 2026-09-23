@@ -388,10 +388,27 @@ it('stores a YouTube name match as a pending suggestion, never as a link, and do
     $again = app(ResolverChain::class)->run(Entry::find($song->id()));
     expect(collect($again['results'])->firstWhere('platform', 'youtube')->reason)->toBe(ResolverChain::ALREADY_SUGGESTED);
 
-    // Rejected: the same URL is not suggested again.
+    // Rejected: YouTube is not asked again at all (its quota is 100 a day).
     $id = app(Suggestions::class)->pending((string) $song->id())[0]->id;
     app(Suggestions::class)->mark($id, Suggestions::REJECTED);
-    app(ResolverChain::class)->fill(Entry::find($song->id()));
-    expect(DB::table(Suggestions::TABLE)->count())->toBe(1)
+    $searchesBefore = collect(Http::recorded())->filter(fn ($p) => str_contains($p[0]->url(), 'googleapis.com'))->count();
+
+    $afterReject = app(ResolverChain::class)->fill(Entry::find($song->id()));
+
+    expect(collect($afterReject['results'])->firstWhere('platform', 'youtube')->reason)->toBe(ResolverChain::ALREADY_SUGGESTED)
+        ->and(collect(Http::recorded())->filter(fn ($p) => str_contains($p[0]->url(), 'googleapis.com'))->count())->toBe($searchesBefore)
+        ->and(DB::table(Suggestions::TABLE)->count())->toBe(1)
         ->and(app(Suggestions::class)->pending((string) $song->id()))->toBe([]);
+});
+
+it('accepts a Tidal answer only with exactly the asked ISRC or UPC', function () {
+    config(['smartlinks.services.tidal.client_id' => 'tid', 'smartlinks.services.tidal.client_secret' => 'tsecret']);
+    Http::fake([
+        'auth.tidal.com/*' => Http::response(['access_token' => 'ttok', 'expires_in' => 86400]),
+        'openapi.tidal.com/v2/tracks*' => Http::response(['data' => [['id' => '1', 'attributes' => ['title' => 'no isrc given']]]]),
+        'openapi.tidal.com/v2/albums*' => Http::response(['data' => [['id' => '2', 'attributes' => []]]]),
+    ]);
+
+    expect(app(TidalResolver::class)->resolve(new Track(isrc: ISRC))->reason)->toBe(Resolution::MISMATCH)
+        ->and(app(TidalResolver::class)->resolve(new Track(upc: UPC, album: true))->reason)->toBe(Resolution::MISMATCH);
 });

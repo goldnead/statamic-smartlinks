@@ -87,6 +87,20 @@ it('accepts a suggestion into the links, and rejects one for good', function () 
         ->and(Entry::find($this->fine->id())->get('streaming_links'))->toHaveCount(1);
 });
 
+it('drops a suggestion instead of adding a second link when the platform got one meanwhile', function () {
+    $user = stateUser(['view smartlinks', 'manage smartlinks']);
+    $id = app(Suggestions::class)->pending((string) $this->suggested->id())[0]->id;
+    $entry = Entry::find($this->suggested->id());
+    $entry->set('streaming_links', [...$entry->get('streaming_links'), ['url' => 'https://www.youtube.com/watch?v=BBBBBBBBBBB']])->save();
+
+    $this->actingAs($user)->post("/cp/smartlinks/suggestions/{$id}/accept")
+        ->assertRedirect('/cp/smartlinks')
+        ->assertSessionHas('success', 'YouTube already has a link; suggestion dropped.');
+
+    expect(Entry::find($this->suggested->id())->get('streaming_links'))->toHaveCount(2)
+        ->and(app(Suggestions::class)->find($id)->status)->toBe(Suggestions::SUPERSEDED);
+});
+
 it('needs manage smartlinks to act on suggestions, and hides the actions without it', function () {
     $viewer = stateUser(['view smartlinks']);
     $id = app(Suggestions::class)->pending((string) $this->suggested->id())[0]->id;

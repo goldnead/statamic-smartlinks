@@ -83,6 +83,17 @@ class SmartlinksController extends CpController
             abort(404);
         }
 
+        $label = $smartlinks->platforms()->label((string) $row->platform);
+
+        // Meanwhile somebody added a link for the platform by hand: never a
+        // second one, the suggestion is done.
+        if ($smartlinks->url($entry, (string) $row->platform) !== null) {
+            $suggestions->mark($suggestion, Suggestions::SUPERSEDED);
+
+            return redirect()->to(cp_route('smartlinks.index'))
+                ->with('success', __('smartlinks::cp.superseded', ['platform' => $label]));
+        }
+
         $smartlinks->appendLinks($entry, [['platform' => (string) $row->platform, 'url' => (string) $row->url]]);
         $suggestions->mark($suggestion, Suggestions::ACCEPTED);
 

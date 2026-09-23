@@ -104,7 +104,7 @@ class ResolverChain
 
             $suggestOnly = $resolver instanceof SuggestsOnly;
 
-            if ($suggestOnly && $entryId !== null && $this->suggestions->hasPending($entryId, $platform)) {
+            if ($suggestOnly && $entryId !== null && $this->suggestions->exists($entryId, $platform)) {
                 $results[] = Resolution::none($platform, self::ALREADY_SUGGESTED);
 
                 continue;

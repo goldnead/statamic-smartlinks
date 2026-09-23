@@ -18,6 +18,22 @@ class Suggestions
 
     public const REJECTED = 'rejected';
 
+    /** The platform got a link another way before anyone accepted. */
+    public const SUPERSEDED = 'superseded';
+
+    /**
+     * Whether the platform was ever suggested for the entry, whatever came
+     * of it. A rejected suggestion is an answer, not a reason to ask the
+     * service again every night.
+     */
+    public function exists(string $entryId, string $platform): bool
+    {
+        return DB::table(self::TABLE)
+            ->where('entry_id', $entryId)
+            ->where('platform', $platform)
+            ->exists();
+    }
+
     /**
      * Stores a suggestion unless this URL was suggested for the entry
      * before (pending, accepted or rejected). Returns whether it is new.

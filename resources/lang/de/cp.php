@@ -31,4 +31,5 @@ return [
     'suggestion_reject' => ':platform-Vorschlag ablehnen',
     'accepted' => ':platform-Link übernommen.',
     'rejected' => 'Vorschlag abgelehnt.',
+    'superseded' => ':platform hat schon einen Link; Vorschlag verworfen.',
 ];

@@ -31,4 +31,5 @@ return [
     'suggestion_reject' => 'Reject :platform suggestion',
     'accepted' => ':platform link added.',
     'rejected' => 'Suggestion rejected.',
+    'superseded' => ':platform already has a link; suggestion dropped.',
 ];

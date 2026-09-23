@@ -52,7 +52,8 @@ class TidalResolver implements Resolver
             $value = data_get($item, $attribute);
             $normalised = $track->album ? Track::normaliseUpc(is_scalar($value) ? (string) $value : null) : Track::normaliseIsrc(is_scalar($value) ? (string) $value : null);
 
-            if ($value === null || $normalised === $key) {
+            // Exact equality only: an item without the identifier is no match.
+            if ($normalised !== null && $normalised === $key) {
                 $match = $item;
                 break;
             }
