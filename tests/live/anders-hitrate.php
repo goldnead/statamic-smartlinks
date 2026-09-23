@@ -22,6 +22,7 @@
  * TIDAL_CLIENT_ID/SECRET in the environment.
  */
 
+use Goldnead\Smartlinks\Contracts\HostResolver;
 use Goldnead\Smartlinks\LinkChecker;
 use Goldnead\Smartlinks\LinkCleaner;
 use Goldnead\Smartlinks\LinkStatus;
@@ -36,6 +37,7 @@ use Goldnead\Smartlinks\Resolvers\SpotifyResolver;
 use Goldnead\Smartlinks\Resolvers\TidalClient;
 use Goldnead\Smartlinks\Resolvers\TidalResolver;
 use Goldnead\Smartlinks\Smartlinks;
+use Goldnead\Smartlinks\Support\DnsHostResolver;
 use Illuminate\Cache\CacheManager;
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
@@ -69,6 +71,7 @@ $app->singleton('cache', fn ($app) => new CacheManager($app));
 $app->singleton(Factory::class, fn () => new Factory);
 $app->singleton(Platforms::class, fn () => new Platforms);
 $app->singleton(LinkCleaner::class);
+$app->bind(HostResolver::class, DnsHostResolver::class);
 $app->singleton(LinkChecker::class);
 $app->singleton(Identifier::class, fn ($app) => new Identifier(
     new Smartlinks($app->make(Platforms::class)),
