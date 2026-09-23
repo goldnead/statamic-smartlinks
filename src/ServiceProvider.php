@@ -39,6 +39,7 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(LinkCleaner::class);
         $this->app->singleton(Suggestions::class);
         $this->app->singleton(LinkStatus::class);
+        $this->app->bindIf(Contracts\HostResolver::class, Support\DnsHostResolver::class);
         $this->app->singleton(LinkChecker::class);
         $this->app->singleton(ResolverChain::class);
 
