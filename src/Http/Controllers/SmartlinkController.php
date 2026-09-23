@@ -21,14 +21,23 @@ class SmartlinkController extends Controller
      */
     public function show(string $slug): Response
     {
+        return $this->showIn('', $slug);
+    }
+
+    /**
+     * The same for a collection under a segment (`/hoeren/release/{slug}`).
+     * Only that segment's collections are asked.
+     */
+    public function showIn(string $segment, string $slug): Response
+    {
         $this->abortUnlessEnabled();
 
-        $entry = $this->smartlinks->findBySlug($slug) ?? throw new NotFoundHttpException;
+        $entry = $this->smartlinks->findBySlug($slug, $segment) ?? throw new NotFoundHttpException;
         $links = $this->smartlinks->links($entry);
 
         return response()->view((string) config('smartlinks.routes.view', 'smartlinks::landing'), [
             'entry' => $entry,
-            'title' => (string) $entry->get('title'),
+            'title' => (string) $entry->value('title'),
             'links' => array_map(fn (Link $link) => $link->toArray(), $links),
         ])->header('X-Robots-Tag', 'noindex');
     }
@@ -42,9 +51,14 @@ class SmartlinkController extends Controller
      */
     public function go(Request $request, string $slug, string $platform): RedirectResponse
     {
+        return $this->goIn($request, '', $slug, $platform);
+    }
+
+    public function goIn(Request $request, string $segment, string $slug, string $platform): RedirectResponse
+    {
         $this->abortUnlessEnabled();
 
-        $entry = $this->smartlinks->findBySlug($slug) ?? throw new NotFoundHttpException;
+        $entry = $this->smartlinks->findBySlug($slug, $segment) ?? throw new NotFoundHttpException;
         $url = $this->smartlinks->url($entry, $platform) ?? throw new NotFoundHttpException;
 
         if ($this->shouldCount($request) && $this->smartlinks->withinCountLimit($request, $entry, $platform)) {

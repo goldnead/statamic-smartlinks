@@ -11,8 +11,10 @@ use Goldnead\Smartlinks\Resolvers\Track;
 use Goldnead\Smartlinks\Suggestions;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Routing\RouteCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Sleep;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
@@ -366,8 +368,11 @@ it('resolves a release by UPC from a Deezer album link', function () {
         ->and($run['track']->upc)->toBe(UPC)
         ->and(array_map(fn ($r) => $r->url, $run['added']))->toBe(['https://music.apple.com/de/album/alles-wird-gut/1530381797']);
 
-    // A release has a landing page like a song.
-    $this->get('/hoeren/alles-wird-gut-single')->assertOk()->assertSee('Apple Music');
+    // A release has a landing page like a song, under /release/.
+    Route::setRoutes(new RouteCollection);
+    Route::middleware('web')->group(__DIR__.'/../../routes/web.php');
+    Route::getRoutes()->refreshNameLookups();
+    $this->get('/hoeren/release/alles-wird-gut-single')->assertOk()->assertSee('Apple Music');
 });
 
 it('stores a YouTube name match as a pending suggestion, never as a link, and does not ask again', function () {

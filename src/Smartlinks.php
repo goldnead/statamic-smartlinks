@@ -205,44 +205,99 @@ class Smartlinks
         return (bool) config('smartlinks.routes.enabled', true);
     }
 
-    public function landingUrl(Entry $entry): ?string
+    /**
+     * The URL segment a collection's pages sit under, after the prefix:
+     * `smartlinks.routes.segments.{collection}` when set (an empty string
+     * mounts it at the prefix), otherwise `release` for release collections
+     * and none for songs. So a song and its single can share a slug:
+     * `/hoeren/alles-wird-gut` and `/hoeren/release/alles-wird-gut`.
+     */
+    public function segmentFor(string $collection): string
     {
-        if (! $this->routesEnabled() || ! Route::has('smartlinks.show') || ! $entry->slug()) {
-            return null;
+        $configured = (array) config('smartlinks.routes.segments', []);
+
+        if (array_key_exists($collection, $configured)) {
+            return trim((string) $configured[$collection], '/');
         }
 
-        return route('smartlinks.show', ['slug' => $entry->slug()]);
+        return in_array($collection, array_map('strval', (array) config('smartlinks.release_collections', [])), true) ? 'release' : '';
+    }
+
+    /**
+     * Every non-empty segment in use.
+     *
+     * @return list<string>
+     */
+    public function segments(): array
+    {
+        return array_values(array_unique(array_filter(array_map(fn (string $c) => $this->segmentFor($c), $this->collections()))));
+    }
+
+    /**
+     * The collections mounted under a segment ('' = at the prefix), in
+     * config order: the order a slug is looked up in.
+     *
+     * @return list<string>
+     */
+    public function collectionsForSegment(string $segment): array
+    {
+        return array_values(array_filter($this->collections(), fn (string $c) => $this->segmentFor($c) === $segment));
+    }
+
+    public function landingUrl(Entry $entry): ?string
+    {
+        return $this->routeFor($entry, 'show');
     }
 
     public function clickUrl(Entry $entry, string $platform): ?string
     {
-        if (! $this->routesEnabled() || ! Route::has('smartlinks.go') || ! $entry->slug()) {
-            return null;
-        }
-
-        return route('smartlinks.go', ['slug' => $entry->slug(), 'platform' => $platform]);
+        return $this->routeFor($entry, 'go', ['platform' => $platform]);
     }
 
     /**
-     * A published entry of a smart link collection in the current site.
+     * @param  array<string, string>  $extra
      */
-    public function findBySlug(string $slug): ?Entry
+    protected function routeFor(Entry $entry, string $action, array $extra = []): ?string
     {
-        $collections = $this->collections();
+        $segment = $this->segmentFor((string) $entry->collectionHandle());
+        $name = $segment === '' ? "smartlinks.{$action}" : "smartlinks.segment.{$action}";
 
-        if ($collections === [] || $slug === '') {
+        if (! $this->routesEnabled() || ! Route::has($name) || ! $entry->slug()) {
             return null;
         }
 
-        /** @var Entry|null $entry */
-        $entry = Entries::query()
-            ->whereIn('collection', $collections)
-            ->where('slug', $slug)
-            ->where('site', Site::current()->handle())
-            ->whereStatus('published')
-            ->first();
+        return route($name, array_filter(['segment' => $segment, 'slug' => $entry->slug(), ...$extra], fn ($v) => $v !== ''));
+    }
 
-        return $entry;
+    /**
+     * A published entry in the current site. `$segment` says which
+     * collections to look in ('' = those at the prefix); they are asked one
+     * by one in config order, so a slug two collections share always finds
+     * the same entry. null asks every smart link collection.
+     */
+    public function findBySlug(string $slug, ?string $segment = null): ?Entry
+    {
+        $collections = $segment === null ? $this->collections() : $this->collectionsForSegment($segment);
+
+        if ($slug === '') {
+            return null;
+        }
+
+        foreach ($collections as $collection) {
+            /** @var Entry|null $entry */
+            $entry = Entries::query()
+                ->where('collection', $collection)
+                ->where('slug', $slug)
+                ->where('site', Site::current()->handle())
+                ->whereStatus('published')
+                ->first();
+
+            if ($entry !== null) {
+                return $entry;
+            }
+        }
+
+        return null;
     }
 
     /**
