@@ -46,8 +46,8 @@ class Check extends Command
         $counts = [LinkStatus::OK => 0, LinkStatus::DEAD => 0, LinkStatus::UNKNOWN => 0];
         $rows = [];
 
+        /** @var Entry $entry */
         foreach ($entries as $entry) {
-            /** @var Entry $entry */
             foreach (array_unique($smartlinks->storedUrls($entry)) as $url) {
                 $result = $checker->check($url);
                 $counts[$result['status']]++;
