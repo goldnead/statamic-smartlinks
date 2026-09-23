@@ -150,7 +150,7 @@ foreach ($files as $file) {
             $note = '';
         } elseif (! $result->successful()) {
             $class = $have !== null ? 'missing' : 'none';
-            $note = $result->reason;
+            $note = $result->reason.($reason !== Resolution::FOUND ? " (identify: {$reason})" : '');
         } elseif ($have !== null && trackKey($platform, $have) === trackKey($platform, (string) $result->url)) {
             $class = 'identical';
             $note = '';

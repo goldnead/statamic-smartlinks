@@ -4,6 +4,7 @@ namespace Goldnead\Smartlinks\Resolvers;
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 
 /**
  * Deezer's public catalogue API, free and without a key.
@@ -39,6 +40,27 @@ class DeezerClient
      */
     protected function get(string $path): ?array
     {
+        // Deezer's quota (code 4) and "busy" (700) pass within a second or
+        // two: one retry after a pause, then the error stands. Measured on
+        // the ANDERS catalogue, where 2 of 39 songs fell through without it.
+        try {
+            return $this->attempt($path);
+        } catch (ServiceError $e) {
+            if ($e->reason !== Resolution::RATE_LIMITED) {
+                throw $e;
+            }
+
+            Sleep::for((int) config('smartlinks.services.deezer.retry_ms', 1500))->milliseconds();
+
+            return $this->attempt($path);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function attempt(string $path): ?array
+    {
         try {
             $response = Http::timeout((int) config('smartlinks.services.timeout', 10))
                 ->acceptJson()
@@ -56,7 +78,7 @@ class DeezerClient
         if (is_array($error)) {
             return match ((int) ($error['code'] ?? 0)) {
                 800 => null,
-                4 => throw new ServiceError(Resolution::RATE_LIMITED, 'deezer: quota'),
+                4, 700 => throw new ServiceError(Resolution::RATE_LIMITED, 'deezer: quota or busy'),
                 default => throw new ServiceError(Resolution::HTTP_ERROR, 'deezer: '.($error['message'] ?? 'error')),
             };
         }

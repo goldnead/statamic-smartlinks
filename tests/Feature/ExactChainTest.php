@@ -136,7 +136,18 @@ it('does not link Deezer where the track is not available in the configured coun
     expect(app(DeezerResolver::class)->resolve(new Track(isrc: ISRC))->url)->toBe(DEEZER_TRACK);
 });
 
+it('retries Deezer once after its quota or busy answer', function () {
+    Sleep::fake();
+    Http::fake(['api.deezer.com/track/isrc:*' => Http::sequence()
+        ->push(['error' => ['type' => 'Exception', 'message' => 'Quota limit exceeded', 'code' => 4]])
+        ->push(deezerTrack())]);
+
+    expect(app(DeezerResolver::class)->resolve(new Track(isrc: ISRC))->url)->toBe(DEEZER_TRACK);
+    Sleep::assertSleptTimes(1);
+});
+
 it('reports Deezer quota and mismatching answers', function () {
+    Sleep::fake();
     Http::fake([
         'api.deezer.com/track/isrc:DEHY12002800' => Http::response(['error' => ['type' => 'Exception', 'message' => 'Quota limit exceeded', 'code' => 4]]),
         'api.deezer.com/track/isrc:DEHY12002801' => Http::response(deezerTrack(['isrc' => 'DEHY99999999'])),
