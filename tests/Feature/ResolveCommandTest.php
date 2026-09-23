@@ -19,7 +19,7 @@ beforeEach(function () {
 
 it('fills missing links and never overwrites an existing one', function () {
     $existing = [
-        ['platform' => 'tidal', 'link_type' => 'Song', 'url' => 'https://listen.tidal.com/track/1'],
+        ['platform' => 'tidal', 'link_type' => 'Song', 'url' => 'https://tidal.com/track/1'],
         ['platform' => 'deezer', 'link_type' => 'Song', 'url' => 'https://www.deezer.com/track/HANDGEPFLEGT'],
     ];
     $song = $this->makeSong('Alles wird gut', $existing, ['spotify_id' => '1w0r0NDXEByTCr7wa5HjNK']);
@@ -98,14 +98,14 @@ it('appends to a plain list of URLs as a URL', function () {
     $song = Entry::make()->collection('songs')->slug('liste')->data([
         'title' => 'Liste',
         'spotify_id' => '1w0r0NDXEByTCr7wa5HjNK',
-        'streaming_links' => ['https://listen.tidal.com/track/1'],
+        'streaming_links' => ['https://tidal.com/track/1'],
     ]);
     $song->save();
 
     $this->artisan('smartlinks:resolve', ['entry' => 'liste'])->assertSuccessful();
 
     expect(Entry::find($song->id())->get('streaming_links'))->toBe([
-        'https://listen.tidal.com/track/1',
+        'https://tidal.com/track/1',
         'https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK',
         'https://www.deezer.com/track/1069843552',
     ]);

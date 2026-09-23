@@ -57,7 +57,7 @@ function cpUser(array $permissions): Statamic\Contracts\Auth\User
 
 it('shows clicks per song and platform over the last 30 days', function () {
     $a = $this->makeSong('Alles wird gut', ['https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK', 'https://www.deezer.com/track/1']);
-    $this->makeSong('Bei dir', ['https://listen.tidal.com/track/1']);
+    $this->makeSong('Bei dir', ['https://tidal.com/track/1']);
 
     $this->travelTo(now()->subDays(40));
     $this->withHeader('User-Agent', UA)->get('/hoeren/bei-dir/tidal');
@@ -99,7 +99,7 @@ it('shows clicks per song and platform over the last 30 days', function () {
 });
 
 it('keeps few columns visible by default, like core, so a phone fits title and row menu', function () {
-    $this->makeSong('A', ['https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK', 'https://www.deezer.com/track/1', 'https://listen.tidal.com/track/1']);
+    $this->makeSong('A', ['https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK', 'https://www.deezer.com/track/1', 'https://tidal.com/track/1']);
     foreach (['spotify', 'spotify', 'deezer', 'tidal'] as $platform) {
         $this->withHeader('User-Agent', UA)->get('/hoeren/a/'.$platform);
     }
@@ -152,7 +152,7 @@ it('registers the permission and the nav item', function () {
 
 it('renders the links tag with platform, url, label, icon and click url', function () {
     $song = $this->makeSong('Alles wird gut', [
-        ['platform' => 'spotify', 'url' => 'https://listen.tidal.com/track/1'],
+        ['platform' => 'spotify', 'url' => 'https://tidal.com/track/1'],
         'https://geo.music.apple.com/de/album/x/1',
     ]);
 
@@ -164,8 +164,8 @@ it('renders the links tag with platform, url, label, icon and click url', functi
 
     // Apple Music before Tidal: priority, not stored order.
     expect($out)->toBe(
-        '[applemusic|Apple Music|applemusic|https://geo.music.apple.com/de/album/x/1|http://localhost/hoeren/alles-wird-gut/applemusic]'
-        .'[tidal|Tidal|tidal|https://listen.tidal.com/track/1|http://localhost/hoeren/alles-wird-gut/tidal]'
+        '[applemusic|Apple Music|applemusic|https://music.apple.com/de/album/x/1|http://localhost/hoeren/alles-wird-gut/applemusic]'
+        .'[tidal|Tidal|tidal|https://tidal.com/track/1|http://localhost/hoeren/alles-wird-gut/tidal]'
     );
 });
 
@@ -174,7 +174,7 @@ it('orders links by the configured priority, then alphabetically, other last', f
         'https://example.com/merch',
         'https://www.boomplay.com/songs/1',
         'https://www.amazon.de/dp/B0',
-        'https://listen.tidal.com/track/1',
+        'https://tidal.com/track/1',
         'https://www.anghami.com/song/1',
         'https://music.youtube.com/watch?v=yG4VfxlXbIc',
         'https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK',

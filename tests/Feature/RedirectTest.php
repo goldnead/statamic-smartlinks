@@ -16,12 +16,12 @@ function clickRows(): array
 it('redirects to the stored URL and counts the click', function () {
     $song = $this->makeSong('Alles wird gut', [
         'https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK',
-        'https://listen.tidal.com/track/172804280',
+        'https://tidal.com/track/172804280',
     ]);
 
     $this->withHeader('User-Agent', BROWSER)->get('/hoeren/alles-wird-gut/tidal')
         ->assertStatus(302)
-        ->assertRedirect('https://listen.tidal.com/track/172804280');
+        ->assertRedirect('https://tidal.com/track/172804280');
     $this->withHeader('User-Agent', BROWSER)->get('/hoeren/alles-wird-gut/tidal')->assertStatus(302);
 
     expect(clickRows())->toBe([[(string) $song->id(), 'tidal', 2]]);
@@ -29,10 +29,10 @@ it('redirects to the stored URL and counts the click', function () {
 
 it('ignores a hand-typed platform label and goes by the URL', function () {
     // The ANDERS failure: a Tidal link labelled Spotify.
-    $this->makeSong('Bei dir', [['platform' => 'spotify', 'url' => 'https://listen.tidal.com/track/1']]);
+    $this->makeSong('Bei dir', [['platform' => 'spotify', 'url' => 'https://tidal.com/track/1']]);
 
     $this->withHeader('User-Agent', BROWSER)->get('/hoeren/bei-dir/spotify')->assertNotFound();
-    $this->withHeader('User-Agent', BROWSER)->get('/hoeren/bei-dir/tidal')->assertRedirect('https://listen.tidal.com/track/1');
+    $this->withHeader('User-Agent', BROWSER)->get('/hoeren/bei-dir/tidal')->assertRedirect('https://tidal.com/track/1');
 });
 
 it('is a 404 for a tampered platform or slug, and never redirects off-list', function (string $path) {

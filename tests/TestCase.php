@@ -32,10 +32,13 @@ abstract class TestCase extends AddonTestCase
             $this->navCallbacks[] = $callback;
         });
 
-        $this->app->getProvider(ServiceProvider::class)?->bootAddon();
+        $provider = $this->app->getProvider(ServiceProvider::class);
+        $provider?->bootAddon();
 
-        // Core registers tags and fieldtypes from its booted callback, which
-        // Testbench never fires; do what that discovery would.
+        // Core registers tags, fieldtypes and listeners (src/Listeners) from
+        // its booted callback, which Testbench never fires; do what that
+        // discovery would.
+        $provider?->bootEvents();
         Smartlinks::register();
         SmartlinkUrl::register();
 

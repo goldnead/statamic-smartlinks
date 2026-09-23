@@ -20,13 +20,19 @@ return [
     | row (a hand-typed "platform", say) is ignored: the platform is always
     | derived from the URL's host, never from a label.
     |
-    | `spotify_field` holds a Spotify track ID or URL, the starting point for
-    | `smartlinks:resolve`. `isrc_field` is optional; with it, Deezer can be
-    | filled without Spotify credentials.
+    | `spotify_field` holds a Spotify track ID or URL. `isrc_field` and
+    | `upc_field` are optional: when the blueprint has them, the ISRC and UPC
+    | that `smartlinks:resolve` derives are stored there, and the next run
+    | starts from them.
+    |
+    | `release_collections` are collections of releases (albums, EPs,
+    | singles). They get a page too, and are resolved by UPC instead of ISRC.
     |
     */
 
     'collections' => ['songs'],
+
+    'release_collections' => [],
 
     'field' => 'streaming_links',
 
@@ -35,6 +41,34 @@ return [
     'spotify_field' => 'spotify_id',
 
     'isrc_field' => null,
+
+    'upc_field' => null,
+
+    /*
+    | The storefront: the country whose catalogue the resolvers ask (iTunes
+    | `country`, Spotify `market`, Tidal `countryCode`) and in which a found
+    | track must be available (Deezer `available_countries`).
+    */
+
+    'country' => env('SMARTLINKS_COUNTRY', 'DE'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Link cleanup
+    |--------------------------------------------------------------------------
+    |
+    | On save (and with `smartlinks:clean`) links lose foreign affiliate and
+    | tracking parameters (Apple `at`, `ct`, `uo`, `app`; `utm_*`; Spotify
+    | `si`, …) and get one canonical form. `keep` lists parameters never to
+    | remove (your own affiliate token), `strip` extra ones to remove.
+    |
+    */
+
+    'cleanup' => [
+        'on_save' => true,
+        'keep' => [],
+        'strip' => [],
+    ],
 
     /*
     | Where `smartlinks:resolve` writes the platform of a link it adds, next
