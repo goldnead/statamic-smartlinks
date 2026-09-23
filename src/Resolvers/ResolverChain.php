@@ -5,6 +5,7 @@ namespace Goldnead\Smartlinks\Resolvers;
 use Goldnead\Smartlinks\Contracts\Resolver;
 use Goldnead\Smartlinks\Contracts\SuggestsOnly;
 use Goldnead\Smartlinks\LinkCleaner;
+use Goldnead\Smartlinks\LinkStatus;
 use Goldnead\Smartlinks\Smartlinks;
 use Goldnead\Smartlinks\Suggestions;
 use Illuminate\Support\Facades\Log;
@@ -64,11 +65,19 @@ class ResolverChain
      * missing. Returns the identification's reason code, the Track and one
      * Resolution per resolver.
      *
-     * @return array{enrichment: string, track: Track, results: list<Resolution>}
+     * Every platform the entry holds a link for counts as present, dead or
+     * not. With `$replaceDead`, a platform whose links are all confirmed
+     * dead is asked again; see {@see self::fill()}.
+     *
+     * @return array{enrichment: string, track: Track, results: list<Resolution>, dead: array<string, string>}
      */
-    public function run(Entry $entry): array
+    public function run(Entry $entry, bool $replaceDead = false): array
     {
-        $present = array_map(fn ($link) => $link->platform, $this->smartlinks->links($entry));
+        $dead = $replaceDead ? $this->replaceableDead($entry) : [];
+        $present = array_values(array_diff(
+            array_unique(array_map(fn (string $url) => $this->smartlinks->platforms()->detect($url), $this->smartlinks->storedUrls($entry))),
+            array_keys($dead),
+        ));
         $track = $this->trackFor($entry);
         $resolvers = $this->resolvers();
 
@@ -79,7 +88,36 @@ class ResolverChain
             'enrichment' => $enrichment,
             'track' => $track,
             'results' => $this->resolve($track, $present, (string) $entry->id()),
+            'dead' => $dead,
         ];
+    }
+
+    /**
+     * Platforms whose stored links are all confirmed dead (two dead checks
+     * in a row), with the first such link: the row a replacement goes into.
+     * A suspect or unknown link, or any live link of the platform, keeps
+     * the platform out.
+     *
+     * @return array<string, string> platform => dead URL
+     */
+    public function replaceableDead(Entry $entry): array
+    {
+        $confirmed = app(LinkStatus::class)->dead((string) $entry->id());
+        $byPlatform = [];
+
+        foreach ($this->smartlinks->storedUrls($entry) as $url) {
+            $byPlatform[$this->smartlinks->platforms()->detect($url)][] = $url;
+        }
+
+        $replaceable = [];
+
+        foreach ($byPlatform as $platform => $urls) {
+            if (array_diff($urls, $confirmed) === []) {
+                $replaceable[$platform] = $urls[0];
+            }
+        }
+
+        return $replaceable;
     }
 
     /**
@@ -139,12 +177,21 @@ class ResolverChain
      * derived ISRC/UPC. With `$dryRun` nothing is saved. Every decision is
      * logged with its reason code.
      *
-     * @return array{enrichment: string, track: Track, results: list<Resolution>, added: list<Resolution>, suggested: list<Resolution>, stored: array<string, string>}
+     * With `$replaceDead` a link found for a platform whose links are all
+     * confirmed dead goes into that dead link's row (other columns kept)
+     * instead of a new one, and the dead link's check history is dropped.
+     *
+     * @return array{enrichment: string, track: Track, results: list<Resolution>, dead: array<string, string>, added: list<Resolution>, replaced: list<array{platform: string, old: string, new: string}>, suggested: list<Resolution>, stored: array<string, string>}
      */
-    public function fill(Entry $entry, bool $dryRun = false): array
+    public function fill(Entry $entry, bool $dryRun = false, bool $replaceDead = false): array
     {
-        $run = $this->run($entry);
-        $added = array_values(array_filter($run['results'], fn (Resolution $r) => $r->successful()));
+        $run = $this->run($entry, $replaceDead);
+        $found = array_values(array_filter($run['results'], fn (Resolution $r) => $r->successful()));
+        $added = array_values(array_filter($found, fn (Resolution $r) => ! isset($run['dead'][$r->platform])));
+        $replaced = array_values(array_map(
+            fn (Resolution $r) => ['platform' => $r->platform, 'old' => $run['dead'][$r->platform], 'new' => (string) $r->url],
+            array_filter($found, fn (Resolution $r) => isset($run['dead'][$r->platform])),
+        ));
         $suggested = array_values(array_filter($run['results'], fn (Resolution $r) => $r->reason === Resolution::SUGGESTED && $r->url !== null));
 
         foreach ($run['results'] as $result) {
@@ -159,8 +206,22 @@ class ResolverChain
 
         $stored = $this->identifiersToStore($entry, $run['track']);
 
+        foreach ($replaced as $replacement) {
+            Log::info('smartlinks: replaced dead link', ['entry' => $entry->id(), ...$replacement, 'dry_run' => $dryRun]);
+        }
+
+        $result = [...$run, 'added' => $added, 'replaced' => $replaced, 'suggested' => $suggested, 'stored' => $stored];
+
         if ($dryRun) {
-            return [...$run, 'added' => $added, 'suggested' => $suggested, 'stored' => $stored];
+            return $result;
+        }
+
+        foreach ($replaced as $replacement) {
+            $this->smartlinks->replaceLink($entry, $replacement['old'], $replacement['new']);
+        }
+
+        if ($replaced !== []) {
+            app(LinkStatus::class)->sync((string) $entry->id(), [], $this->smartlinks->storedUrls($entry));
         }
 
         foreach ($suggested as $suggestion) {
@@ -179,7 +240,7 @@ class ResolverChain
             $entry->save();
         }
 
-        return [...$run, 'added' => $added, 'suggested' => $suggested, 'stored' => $stored];
+        return $result;
     }
 
     /**

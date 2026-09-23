@@ -13,9 +13,10 @@ class Resolve extends Command
 {
     protected $signature = 'smartlinks:resolve
         {entry? : An entry ID or slug; all songs of the configured collections without it}
-        {--dry-run : Show what would be added, save nothing}';
+        {--dry-run : Show what would be added, save nothing}
+        {--replace-dead : Also resolve platforms whose links are all confirmed dead (smartlinks:check) and put the new link into the dead one\'s row}';
 
-    protected $description = 'Fill missing streaming links from Spotify, Deezer and YouTube; never overwrites existing links';
+    protected $description = 'Fill missing streaming links by ISRC/UPC; never overwrites a link, except confirmed dead ones with --replace-dead';
 
     public function handle(Smartlinks $smartlinks, ResolverChain $chain): int
     {
@@ -43,11 +44,16 @@ class Resolve extends Command
 
         foreach ($entries as $entry) {
             /** @var Entry $entry */
-            $result = $chain->fill($entry, $dryRun);
+            $result = $chain->fill($entry, $dryRun, (bool) $this->option('replace-dead'));
             $addedTotal += count($result['added']);
+            $replacedPlatforms = array_column($result['replaced'], 'platform');
+
+            foreach ($result['replaced'] as $replacement) {
+                $rows[] = [(string) $entry->value('title'), $replacement['platform'], $dryRun ? 'would replace' : 'replaced', $replacement['old'].' → '.$replacement['new']];
+            }
 
             foreach ($result['results'] as $resolution) {
-                if ($resolution->reason === ResolverChain::ALREADY_PRESENT) {
+                if ($resolution->reason === ResolverChain::ALREADY_PRESENT || ($resolution->successful() && in_array($resolution->platform, $replacedPlatforms, true))) {
                     continue;
                 }
 

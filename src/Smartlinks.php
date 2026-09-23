@@ -47,6 +47,40 @@ class Smartlinks
     }
 
     /**
+     * Puts `$new` into the row that holds `$old`, every other column of the
+     * row kept, and saves. Same origin rule as appendLinks().
+     */
+    public function replaceLink(Entry $entry, string $old, string $new): bool
+    {
+        $field = (string) config('smartlinks.field', 'streaming_links');
+        $key = (string) config('smartlinks.url_key', 'url');
+
+        $target = $entry;
+        while (! $target->has($field) && $target->origin() instanceof Entry) {
+            $target = $target->origin();
+        }
+
+        $rows = $target->get($field);
+
+        if (! is_array($rows)) {
+            return false;
+        }
+
+        foreach ($rows as $i => $row) {
+            $url = is_array($row) ? ($row[$key] ?? null) : $row;
+
+            if (is_string($url) && trim($url) === $old) {
+                is_array($row) ? $rows[$i][$key] = $new : $rows[$i] = $new;
+                $target->set($field, $rows)->save();
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Appends links as new rows, never touching existing ones, and saves.
      * Writes where the links live: a localisation that inherits them gets
      * them added on its origin, not a copy that ends inheritance.
