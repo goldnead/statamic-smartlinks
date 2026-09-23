@@ -38,6 +38,8 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(Resolvers\Identifier::class);
         $this->app->singleton(LinkCleaner::class);
         $this->app->singleton(Suggestions::class);
+        $this->app->singleton(LinkStatus::class);
+        $this->app->singleton(LinkChecker::class);
         $this->app->singleton(ResolverChain::class);
 
         // On the resolving translator rather than in boot: nav and permission
@@ -85,6 +87,7 @@ class ServiceProvider extends AddonServiceProvider
                 Console\Commands\Resolve::class,
                 Console\Commands\Prune::class,
                 Console\Commands\Clean::class,
+                Console\Commands\Check::class,
             ]);
         }
 

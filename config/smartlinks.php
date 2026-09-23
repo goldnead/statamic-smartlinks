@@ -79,6 +79,25 @@ return [
     | anders-band.de's rows hold it) or `label` (Spotify). null: URL only.
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Dead links
+    |--------------------------------------------------------------------------
+    |
+    | `smartlinks:check` (schedule it nightly) asks every stored link: HEAD,
+    | then GET. 404, 410 or a host that no longer resolves is dead; a 403
+    | wall, 429, 5xx or timeout is "unknown", never dead. Dead links are left
+    | off the landing page and the tags (`hide_dead`) and flagged in the CP.
+    |
+    */
+
+    'check' => [
+        'hide_dead' => true,
+        'timeout' => 10,
+        'per_host_ms' => 1000,
+        'user_agent' => 'Mozilla/5.0 (compatible; statamic-smartlinks link check)',
+    ],
+
     'platform_key' => 'platform',
 
     'platform_value' => 'handle',

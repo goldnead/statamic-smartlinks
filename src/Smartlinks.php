@@ -142,10 +142,16 @@ class Smartlinks
     {
         $links = [];
 
+        // Links the last check found dead are left out (smartlinks.check.hide_dead):
+        // a second link of the platform takes over, or the resolver fills the gap.
+        $dead = config('smartlinks.check.hide_dead', true)
+            ? app(LinkStatus::class)->dead((string) $entry->id())
+            : [];
+
         foreach ($this->storedUrls($entry) as $url) {
             $platform = $this->platforms->detect($url);
 
-            if (isset($links[$platform])) {
+            if (isset($links[$platform]) || in_array($url, $dead, true)) {
                 continue;
             }
 
