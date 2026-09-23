@@ -29,7 +29,13 @@ Then tell it where the links are (`php artisan vendor:publish --tag=smartlinks-c
 'url_key' => 'url',                // the URL column in a Grid row
 'spotify_field' => 'spotify_id',   // a Spotify track ID or URL, for auto-fill
 'isrc_field' => null,              // optional; lets Deezer be filled without Spotify credentials
+'platform_key' => 'platform',      // where auto-fill writes the platform next to the URL; null = don't
+'platform_value' => 'handle',      // `handle` (spotify) or `label` (Spotify)
 ```
+
+The addon never reads `platform_key` back; it is there for templates that render a row's
+`{{ platform }}`. Links are read with inheritance, so a localisation without its own links shows
+its origin's, and auto-fill adds new links to the origin.
 
 In the blueprint, give the URL column the **Streaming URL** fieldtype (`smartlink_url`). It shows
 the detected platform next to each URL as you type; an unknown host shows as "Other". A
@@ -46,11 +52,18 @@ which ones they pick.
 On one band site, 216 of 444 hand-labelled links pointed somewhere else than their label said.
 So there is no label. A host matches itself and every subdomain, and the most specific host
 wins: `music.youtube.com` is YouTube Music, `youtube.com` is YouTube, `geo.music.apple.com` is
-Apple Music, `link.tospotify.com` is Spotify, `apple.com` itself is "other".
+Apple Music, `link.tospotify.com` is Spotify, `apple.com` itself is "other". Short links count:
+`spoti.fi` and `spotify.link` are Spotify, `apple.co` is Apple Music. A URL with userinfo
+(`https://open.spotify.com@evil.test/`) is not a link at all.
 
-Built in: Spotify, Apple Music, Amazon Music, YouTube Music, YouTube, Tidal, Deezer, SoundCloud,
-Bandcamp, Yandex Music, Anghami, Boomplay, Pandora, Napster, Audiomack, Qobuz, Beatport, KKBOX.
-More via `'platforms' => ['audiomack' => ['audiomack.com']]`.
+Built in: Spotify, Apple Music, Amazon Music, Amazon (the shop), YouTube Music, YouTube, Tidal,
+Deezer, SoundCloud, Bandcamp, Yandex Music, Anghami, Boomplay, Pandora, Napster, Audiomack, Qobuz,
+Beatport, KKBOX. More via `'platforms' => ['audiomack' => ['audiomack.com']]`.
+
+**Amazon vs. Amazon Music.** `music.amazon.*` is `amazonmusic`; the shop (`amazon.de/dp/…`,
+`amazon.com/gp/…`, `amzn.to`) is its own platform `amazon`, labelled "Amazon". anders-band.de's
+Webflow import mapped both to `amazonmusic`; there, a shop link now shows as "Amazon" and its
+click URL is `/hoeren/{slug}/amazon`.
 
 One link per platform: when a song has two Spotify links, the first one counts.
 
@@ -63,7 +76,8 @@ One link per platform: when a song has two Spotify links, the first one counts.
 
 - The redirect only ever goes to a URL stored on the entry. An unknown slug, an unpublished song,
   a platform the song has no link for, or a stored value that is not `http(s)` is a 404.
-- Prefix, throttle and the view in `smartlinks.routes`. `SMARTLINKS_ROUTES_ENABLED=false` removes
+- No throttle on either route: a concert crowd scanning one QR code shares the venue's IP.
+- Prefix and view in `smartlinks.routes`. `SMARTLINKS_ROUTES_ENABLED=false` removes
   both routes; the controller checks again, so a cached route cannot keep them open.
 - The page is `smartlinks::landing`, a plain Blade view. Publish it
   (`--tag=smartlinks-views`) or point `smartlinks.routes.view` at an Antlers template; it gets
@@ -75,8 +89,18 @@ One link per platform: when a song has two Spotify links, the first one counts.
 agent. An upsert on a unique index, so parallel clicks never make a second row.
 
 Not counted, but still redirected: user agents that are empty or contain one of
-`smartlinks.clicks.bots` (Googlebot, WhatsApp and Facebook previews, curl, …), and HEAD
-requests.
+`smartlinks.clicks.bots` (Googlebot, WhatsApp and Facebook previews, curl, …), HEAD requests,
+browser prefetches (`Sec-Purpose`, `Purpose` or `X-Moz: prefetch`), and more than
+`smartlinks.clicks.per_minute` (10) clicks per IP, song and platform within a minute. That cap
+lives in the cache under a hashed key for a minute; the IP never reaches the database.
+
+Counters older than 400 days (`smartlinks.clicks.prune_days`) go with
+
+```bash
+php artisan smartlinks:prune            # or --days=90
+```
+
+Schedule it in `routes/console.php`: `Schedule::command('smartlinks:prune')->daily();`
 
 The Control Panel screen **Smart Links** (under Content, permission `view smartlinks`) lists
 every song with its clicks per platform over the last 30 days (`smartlinks.cp.days`).
