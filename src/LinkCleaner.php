@@ -19,7 +19,13 @@ namespace Goldnead\Smartlinks;
 class LinkCleaner
 {
     /** Removed on every host. `utm_*` by prefix. */
-    public const STRIP_ALWAYS = ['utm_*', 'fbclid', 'gclid', 'igshid', 'si'];
+    public const STRIP_ALWAYS = [
+        'utm_*', 'si', 'refer', 'ref', 'ref_src',
+        // ad and social click IDs
+        'fbclid', 'gclid', 'gbraid', 'wbraid', 'dclid', 'msclkid', 'yclid', 'ttclid', 'twclid', 'igshid', 'li_fat_id',
+        // newsletter tools
+        'mc_cid', 'mc_eid', '_hsenc', '_hsmi', 'mkt_tok',
+    ];
 
     /** @var array<string, list<string>> platform => parameters */
     public const STRIP_PER_PLATFORM = [

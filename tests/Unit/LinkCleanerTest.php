@@ -20,6 +20,8 @@ it('strips foreign affiliate and tracking parameters and normalises the URL form
     'YouTube keeps v, drops utm and si' => ['https://www.youtube.com/watch?v=yG4VfxlXbIc&utm_campaign=x&si=y', 'https://www.youtube.com/watch?v=yG4VfxlXbIc'],
     'unknown host keeps its query' => ['https://www.boomplay.com/songs/44031875?from=home', 'https://www.boomplay.com/songs/44031875?from=home'],
     'fragment is kept' => ['https://soundcloud.com/anders/song?utm_source=a#t=10', 'https://soundcloud.com/anders/song#t=10'],
+    'Anghami linktree referrer' => ['https://play.anghami.com/song/1447428?refer=linktree', 'https://play.anghami.com/song/1447428'],
+    'generic click ids' => ['https://www.boomplay.com/songs/1?msclkid=a&ttclid=b&mc_cid=c&ref=home&keep=1', 'https://www.boomplay.com/songs/1?keep=1'],
     'already clean' => ['https://www.deezer.com/track/1', 'https://www.deezer.com/track/1'],
     'not a URL is left alone' => ['javascript:alert(1)', 'javascript:alert(1)'],
 ]);
