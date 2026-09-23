@@ -67,6 +67,11 @@ click URL is `/hoeren/{slug}/amazon`.
 
 One link per platform: when a song has two Spotify links, the first one counts.
 
+The buttons (landing page and `{{ smartlinks:links }}`) follow `smartlinks.priority`, not the
+stored row order: Spotify, Apple Music, YouTube Music, Amazon Music, Deezer, Tidal, YouTube,
+SoundCloud, Bandcamp, Amazon, then the rest alphabetically, "other" last. Handles may be written
+with underscores (`apple_music`).
+
 ## Routes
 
 | | |
@@ -103,7 +108,9 @@ php artisan smartlinks:prune            # or --days=90
 Schedule it in `routes/console.php`: `Schedule::command('smartlinks:prune')->daily();`
 
 The Control Panel screen **Smart Links** (under Content, permission `view smartlinks`) lists
-every song with its clicks per platform over the last 30 days (`smartlinks.cp.days`).
+every song with its clicks per platform over the last 30 days (`smartlinks.cp.days`). Like
+core's Entries listing it pages on the server and shows few columns by default (song, clicks,
+the busiest platform); the others are under "Customize columns".
 
 ## Tags
 
@@ -129,7 +136,8 @@ php artisan smartlinks:resolve alles-wird-gut # one, by slug or ID
 
 Only platforms the song has no link for are asked, found links are appended as new rows, and an
 existing link is never touched. Every decision is logged (`smartlinks: resolve`) with a reason:
-`found`, `not_configured`, `missing_input`, `not_found`, `no_confident_match`, `http_error`.
+`found`, `already_present` (the song has a link for that platform, the resolver was not asked),
+`not_configured`, `missing_input`, `not_found`, `no_confident_match`, `http_error`.
 
 | Resolver | Needs | How |
 |---|---|---|

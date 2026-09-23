@@ -16,7 +16,10 @@ First version.
   `clicks.per_minute` per IP, song and platform.
 - `php artisan smartlinks:prune --days=` (default 400), schedulable.
 - Control Panel screen "Smart Links" with clicks per platform over the last 30 days,
-  permission `view smartlinks`.
+  permission `view smartlinks`; server-side listing with core's paginator footer, few columns
+  visible by default so it fits a phone.
+- Buttons ordered by `smartlinks.priority` (Spotify, Apple Music, YouTube Music, …), not by
+  stored row order.
 - `php artisan smartlinks:resolve {entry?} --dry-run`: fills missing links from Spotify (ID,
   Web API with client credentials, one retry with a fresh token after a 401), Deezer (ISRC) and
   YouTube (Data API, Topic channel only). Never overwrites; writes the platform under
