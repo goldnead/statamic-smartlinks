@@ -1,0 +1,21 @@
+<?php
+
+return [
+    'nav' => 'Smart Links',
+    'title' => 'Smart Links',
+    'permission_view' => 'Smart-Link-Klicks ansehen',
+    'col_title' => 'Song',
+    'col_total' => 'Klicks',
+    'col_links' => 'Links',
+    'period' => 'Klicks der letzten :days Tage, je Plattform. Die Plattform folgt aus der Domain der URL.',
+    'truncated' => 'Es werden die ersten :limit Songs gezeigt.',
+    'open_page' => 'Seite öffnen',
+    'edit' => 'Bearbeiten',
+    'empty_heading' => 'Noch keine Songs',
+    'empty_description' => 'Smart Links liest die Songs aus den Collections in config/smartlinks.php. Dort ist noch keiner angelegt.',
+    'setup_heading' => 'Einrichtung fehlt',
+    'setup_migrate_heading' => 'Migration ausführen',
+    'setup_migrate_description' => 'Die Tabelle smartlinks_clicks fehlt. php artisan migrate legt sie an.',
+    'fieldtype_title' => 'Streaming-URL',
+    'fieldtype_detected' => 'Erkannt',
+];
