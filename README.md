@@ -188,11 +188,17 @@ php artisan smartlinks:check             # record in smartlinks_link_status
 ```
 
 Schedule it nightly: `Schedule::command('smartlinks:check')->dailyAt('03:30');`. HEAD first, GET
-when HEAD is refused; one request per host and second. Only 404, 410 or a host that no longer
-resolves counts as dead. A 403 wall, 429, 5xx or timeout is "unknown", never dead. Dead links
-are left off the landing page and the tags (`check.hide_dead`), so a second link of the same
-platform or the next `smartlinks:resolve` takes over. The CP shows them per song, filter
-"Dead links".
+when HEAD is refused; one request per host and second. Only 404 or 410 counts as a dead answer.
+A 403 wall, 429, 5xx, timeout, connection error or a host that does not resolve is "unknown",
+never dead. A link is **confirmed** dead on the second dead check in a row (`suspect` after the
+first); `ok` resets that. Confirmed dead links are left off the landing page and the tags
+(`check.hide_dead`), so a second link of the same platform or the next `smartlinks:resolve`
+takes over. The CP shows them per song, filter "Dead links".
+
+The check never fetches a private, loopback, link-local, reserved or cloud-metadata address
+(IPv4 and IPv6): each host is resolved first, redirects are followed by hand (at most five) and
+checked hop by hop, and the connection is pinned to the checked address. Bind your own
+`Goldnead\Smartlinks\Contracts\HostResolver` if the server needs a different DNS policy.
 
 ## Control Panel
 

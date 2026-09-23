@@ -23,9 +23,25 @@
   `already_suggested`.
 - Live hit-rate harness `tests/live/anders-hitrate.php` (not in CI), results in `docs/HITRATE.md`.
 
+### Security
+- Link check: every hop's host is resolved and refused when any address is private, loopback,
+  link-local, reserved, multicast or cloud metadata (IPv4 and IPv6, `169.254.169.254`, `::1`,
+  `fc00::/7`, v4-mapped, NAT64); redirects are followed by hand (at most 5), each hop checked;
+  the connection is pinned to the checked address. Resolver bindable (`Contracts\HostResolver`).
+
 ### Changed
 - The resolver chain identifies before it resolves; a failing service no longer affects the
   others.
+- Link check: DNS and connection errors are `unknown`, never `dead`; a link is dead only after
+  two dead checks in a row (`dead_streak`, status `suspect` in between); `hide_dead` hides
+  confirmed dead links only.
+- Apple Music uses Deezer's track position only when that Deezer album carries the entry's UPC
+  (compilations, other editions): otherwise `no_confident_match`.
+- Cleanup splits the query raw (unchanged URLs stay byte for byte), drops rows that are
+  duplicates after cleaning, and carries check history to the cleaned URL (orphans removed).
+- A suggested platform is not searched again after its suggestion was rejected; accepting a
+  suggestion for a platform that has a link meanwhile drops it (`superseded`).
+- Tidal accepts only an item with exactly the asked ISRC or UPC.
 - `release_collections` are part of `Smartlinks::collections()`.
 
 ## 0.1.0 (2026-09-23)

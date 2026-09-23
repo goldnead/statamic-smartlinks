@@ -31,5 +31,9 @@ All 39 songs were identified (ISRC from the Deezer track, UPC from its album).
 A first run the same morning had 1 Deezer and 2 Apple misses, all Deezer's quota answer
 (code 4); since then the Deezer client retries once after a pause, and the second run had none.
 
+Re-run 11:03 after the change that uses Deezer's track position only when its album carries
+the entry's UPC: identical numbers (the ANDERS entries hold no UPC of their own, so the UPC
+always comes from the Deezer album the position is on).
+
 Spotify and Tidal are not measured: no credentials yet. Their resolvers are covered by tests
 with faked responses only.
