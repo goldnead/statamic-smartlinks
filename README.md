@@ -134,22 +134,86 @@ php artisan smartlinks:resolve                # all songs
 php artisan smartlinks:resolve alles-wird-gut # one, by slug or ID
 ```
 
+**Exact, never by name.** First the song's identity: its ISRC (a release: its UPC). It comes from
+the `isrc_field`/`upc_field`, or from any link whose service gives it back: a Deezer link (free),
+a Spotify link or `spotify_field` (with Spotify credentials), a Tidal link (with Tidal
+credentials). With the ISRC, Deezer adds the album and from it the UPC, track and disc number,
+length and the countries the track is available in. Every resolver then asks its service for
+exactly that key. When the blueprint has the `isrc_field`/`upc_field`, the found ISRC and UPC
+are stored there and the next run starts from them.
+
 Only platforms the song has no link for are asked, found links are appended as new rows, and an
-existing link is never touched. Every decision is logged (`smartlinks: resolve`) with a reason:
-`found`, `already_present` (the song has a link for that platform, the resolver was not asked),
-`not_configured`, `missing_input`, `not_found`, `no_confident_match`, `http_error`.
+existing link is never touched. One service failing only costs that service. Every decision is
+logged (`smartlinks: resolve`) with a reason: `found`, `already_present` (the song has a link
+for that platform, the resolver was not asked), `already_suggested`, `suggested`,
+`not_configured`, `missing_input` (no ISRC/UPC), `not_found`, `not_available_in_region`,
+`mismatch` (an answer whose ISRC, UPC, position or length disagrees), `no_confident_match`,
+`rate_limited`, `http_error`.
 
 | Resolver | Needs | How |
 |---|---|---|
-| Spotify | the Spotify ID | the link follows from the ID; with `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` the Web API (client credentials) also supplies ISRC, title, artist |
-| Deezer | an ISRC | `api.deezer.com/track/isrc:{ISRC}`, free, no key |
-| YouTube | `YOUTUBE_API_KEY`, title, artist | Data API search; only a video from the artist's "… - Topic" channel counts, otherwise nothing |
+| Spotify | Spotify ID, or ISRC/UPC + credentials | the link follows from the ID; else `search?q=isrc:…` (tracks) or `q=upc:…&type=album`, `market` = `smartlinks.country`; token cached |
+| Deezer | ISRC or UPC | `track/isrc:{ISRC}`, `album/upc:{UPC}`, free, no key; not linked where `available_countries` lacks the country |
+| Apple Music | UPC (from Deezer) | iTunes `lookup?upc=…&entity=song&country=de`, the track by track and disc number, checked against the length (±10 s); calls spaced to stay under Apple's ~20 a minute |
+| Tidal | ISRC or UPC + `TIDAL_CLIENT_ID`/`SECRET` | `tracks?filter[isrc]=`, `albums?filter[barcodeId]=`, `countryCode` = country; prefers the `TIDAL_SHARING` link |
+| YouTube | `YOUTUBE_API_KEY`, title, artist | name search, so **a suggestion only**: stored as pending and accepted or rejected in the CP, never written by itself. Only a video from the artist's "… - Topic" channel is suggested |
 
-Apple Music (paid developer account), Amazon, Tidal and the rest stay hand-entered. Odesli /
-song.link is not used: its public API was shut down in 2026.
+Amazon, Boomplay, Napster, Yandex and the rest stay hand-entered. Odesli / song.link is not
+used: its public API was shut down in 2026.
+
+**Releases.** Collections in `release_collections` get a page like songs and are resolved by
+UPC: Deezer album, Apple Music album, Spotify album, Tidal album. A Deezer album link on the
+release is enough to start.
 
 Your own resolver implements `Goldnead\Smartlinks\Contracts\Resolver` (`platform()`,
-`resolve(Track): Resolution`) and goes into `smartlinks.resolvers`.
+`resolve(Track): Resolution`) and goes into `smartlinks.resolvers`; a name-matching one
+implements `Contracts\SuggestsOnly` so its finds wait for review.
+
+## Link cleanup
+
+On save, and for existing data with `php artisan smartlinks:clean --dry-run`, every link loses
+somebody else's affiliate and tracking parameters (Apple `at`, `ct`, `uo`, `app`, `itsct`,
+`itscg`, `ls`, `mt`; `utm_*`; Spotify `si`; `fbclid`, `gclid`) and gets one canonical form:
+`music.apple.com` instead of `geo.`/`itunes.`, no `id` prefix, Deezer without the language
+segment, `tidal.com/track/…` instead of `listen.tidal.com/browse/…/u`, `spotify:track:` URIs as
+URLs. The ANDERS Apple links all carried Odesli's affiliate token: the commission went to Odesli.
+`cleanup.keep` protects parameters (your own token), `cleanup.strip` adds more,
+`cleanup.on_save` switches the save hook off.
+
+## Dead links
+
+```bash
+php artisan smartlinks:check --dry-run   # report only
+php artisan smartlinks:check             # record in smartlinks_link_status
+```
+
+Schedule it nightly: `Schedule::command('smartlinks:check')->dailyAt('03:30');`. HEAD first, GET
+when HEAD is refused; one request per host and second. Only 404, 410 or a host that no longer
+resolves counts as dead. A 403 wall, 429, 5xx or timeout is "unknown", never dead. Dead links
+are left off the landing page and the tags (`check.hide_dead`), so a second link of the same
+platform or the next `smartlinks:resolve` takes over. The CP shows them per song, filter
+"Dead links".
+
+## Control Panel
+
+Per song: clicks, and as badges in the title cell the dead links and open suggestions (also
+available as columns). Filter "Link state": dead links, open suggestions. The row menu shows a
+suggestion, accepts it into the links or rejects it for good; that needs `manage smartlinks`.
+
+## Limits
+
+- **Deezer**: the `isrc:`/`upc:` paths are public but not documented; they can go away. Deezer's
+  developer FAQ allows commercial use only with an agreement: clear this before selling to
+  clients.
+- **Tidal**: needs an app in the Tidal developer portal. Cost and terms for commercial use are
+  not known yet.
+- **Spotify**: since February 2026 an app in Development Mode needs a Premium account as owner,
+  returns at most 10 search results and allows 5 users; extended quota only for organisations
+  with 250k monthly users. Lookups without users, as here, are fine.
+- **Apple Music**: through the free iTunes Search API, about 20 calls a minute, no ISRC lookup.
+  A song whose release Deezer does not have, or has without UPC, gets no Apple link.
+- **YouTube**: Data API quota 100 searches a day, name search only, hence suggestions.
+- Measured hit rate on a real catalogue: `docs/HITRATE.md`.
 
 ## Development
 
@@ -158,4 +222,5 @@ composer test                     # SQLite
 DB_DRIVER=mysql DB_DATABASE=smartlinks_test composer test:mysql
 composer lint && composer analyse
 npm run build                     # dist/ is committed
+php tests/live/anders-hitrate.php # live, against the real services; not in CI
 ```

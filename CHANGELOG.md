@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.2.0 (unreleased)
+
+### Added
+- Exact identification: ISRC (songs) or UPC (releases) from the entry's fields or from any
+  Deezer, Spotify or Tidal link; Deezer adds album, UPC, position, length and availability.
+  Stored in `isrc_field`/`upc_field` when the blueprint has them.
+- Resolvers on that key only: Apple Music (Deezer UPC → iTunes lookup, track by position,
+  length checked, paced to ~20 calls a minute), Spotify search `isrc:`/`upc:`, Deezer
+  `album/upc:`, Tidal (`filter[isrc]`, `filter[barcodeId]`, `TIDAL_SHARING` link).
+- Region: `smartlinks.country` (default DE) for all storefronts; Deezer tracks unavailable
+  there are not linked.
+- `release_collections`: releases get a page and are resolved as albums by UPC.
+- YouTube finds are suggestions (`smartlinks_suggestions`), accepted or rejected in the CP
+  (permission `manage smartlinks`), never written by themselves; a rejected URL is not
+  suggested again.
+- Link cleanup on save and `smartlinks:clean --dry-run`: foreign affiliate and tracking
+  parameters removed, URL forms normalised, `cleanup.keep`/`cleanup.strip`.
+- `smartlinks:check --dry-run`: dead-link check (HEAD, GET fallback, per-host pacing), table
+  `smartlinks_link_status`, dead links hidden on the landing page, badges and filter in the CP.
+- Reason codes `rate_limited`, `mismatch`, `not_available_in_region`, `suggested`,
+  `already_suggested`.
+- Live hit-rate harness `tests/live/anders-hitrate.php` (not in CI), results in `docs/HITRATE.md`.
+
+### Changed
+- The resolver chain identifies before it resolves; a failing service no longer affects the
+  others.
+- `release_collections` are part of `Smartlinks::collections()`.
+
 ## 0.1.0 (2026-09-23)
 
 First version.
