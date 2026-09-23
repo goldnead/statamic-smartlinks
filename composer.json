@@ -1,0 +1,92 @@
+{
+    "name": "goldnead/statamic-smartlinks",
+    "description": "Smart links for music releases in Statamic: one page per song that sends listeners to their platform, platform detected from the URL, clicks counted, missing links filled from Spotify, Deezer and YouTube.",
+    "type": "statamic-addon",
+    "license": "proprietary",
+    "keywords": [
+        "statamic",
+        "statamic-addon",
+        "smart-links",
+        "music",
+        "streaming",
+        "spotify"
+    ],
+    "authors": [
+        {
+            "name": "Adrian Goldner",
+            "email": "info@adriangoldner.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/goldnead/statamic-smartlinks/issues",
+        "source": "https://github.com/goldnead/statamic-smartlinks"
+    },
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^12.40|^13.0",
+        "statamic/cms": "^6.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.18",
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^3.0|^4.0|^5.0",
+        "pestphp/pest-plugin-laravel": "^3.0|^4.0|^5.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Goldnead\\Smartlinks\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Goldnead\\Smartlinks\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "statamic": {
+            "name": "Smart Links",
+            "slug": "smartlinks",
+            "description": "A landing page per song that sends listeners to their platform, and counts the clicks.",
+            "url": "https://github.com/goldnead/statamic-smartlinks",
+            "developer": "Adrian Goldner",
+            "developer-url": "https://adriangoldner.dev"
+        },
+        "laravel": {
+            "providers": [
+                "Goldnead\\Smartlinks\\ServiceProvider"
+            ],
+            "aliases": {
+                "Smartlinks": "Goldnead\\Smartlinks\\Facades\\Smartlinks"
+            }
+        }
+    },
+    "scripts": {
+        "test": [
+            "@php vendor/bin/pest"
+        ],
+        "test:mysql": [
+            "@php vendor/bin/pest -c phpunit.mysql.xml"
+        ],
+        "lint": [
+            "@php vendor/bin/pint --test"
+        ],
+        "fix": [
+            "@php vendor/bin/pint"
+        ],
+        "analyse": [
+            "@php vendor/bin/phpstan analyse --memory-limit=1G"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "pixelfear/composer-dist-plugin": true,
+            "composer/installers": true,
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
