@@ -66,23 +66,70 @@ it('shows clicks per song and platform over the last 30 days', function () {
     $this->withHeader('User-Agent', UA)->get('/hoeren/alles-wird-gut/spotify');
     $this->withHeader('User-Agent', UA)->get('/hoeren/alles-wird-gut/deezer');
 
-    $this->actingAs(cpUser(['view smartlinks']))
+    $user = cpUser(['view smartlinks']);
+
+    $this->actingAs($user)
         ->get('/cp/smartlinks')
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('smartlinks::Smartlinks/Index')
             ->where('days', 30)
-            ->has('rows', 2)
-            ->where('rows.0.id', (string) $a->id())
-            ->where('rows.0.total', 3)
-            ->where('rows.0.platform_spotify', 2)
-            ->where('rows.0.platform_deezer', 1)
-            ->where('rows.0.links', 2)
-            ->where('rows.1.title', 'Bei dir')
-            ->where('rows.1.total', 0)
+            ->where('hasSongs', true)
+            ->where('listingUrl', cp_route('smartlinks.listing'))
             ->has('initialColumns', 5)
             ->where('initialColumns.3.field', 'platform_spotify')
             ->where('initialColumns.3.label', 'Spotify'));
+
+    $this->actingAs($user)->getJson('/cp/smartlinks/listing')
+        ->assertOk()
+        ->assertJsonPath('data.0.id', (string) $a->id())
+        ->assertJsonPath('data.0.total', 3)
+        ->assertJsonPath('data.0.platform_spotify', 2)
+        ->assertJsonPath('data.0.platform_deezer', 1)
+        ->assertJsonPath('data.0.links', 2)
+        ->assertJsonPath('data.1.title', 'Bei dir')
+        ->assertJsonPath('data.1.total', 0)
+        // Core's paginator meta: the "1–2 of 2" footer.
+        ->assertJsonPath('meta.from', 1)
+        ->assertJsonPath('meta.to', 2)
+        ->assertJsonPath('meta.total', 2)
+        ->assertJsonPath('meta.current_page', 1)
+        ->assertJsonPath('meta.last_page', 1)
+        ->assertJsonCount(5, 'meta.columns');
+});
+
+it('keeps few columns visible by default, like core, so a phone fits title and row menu', function () {
+    $this->makeSong('A', ['https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK', 'https://www.deezer.com/track/1', 'https://listen.tidal.com/track/1']);
+    foreach (['spotify', 'spotify', 'deezer', 'tidal'] as $platform) {
+        $this->withHeader('User-Agent', UA)->get('/hoeren/a/'.$platform);
+    }
+
+    $columns = collect($this->actingAs(cpUser(['view smartlinks']))->getJson('/cp/smartlinks/listing')->json('meta.columns'));
+
+    expect($columns->where('visible', true)->pluck('field')->all())->toBe(['title', 'total', 'platform_spotify'])
+        ->and($columns->pluck('field')->all())->toContain('links', 'platform_deezer', 'platform_tidal');
+});
+
+it('searches, sorts and pages on the server', function () {
+    foreach (['Alpha', 'Beta', 'Gamma'] as $title) {
+        $this->makeSong($title, ['https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK']);
+    }
+    $user = cpUser(['view smartlinks']);
+
+    $this->actingAs($user)->getJson('/cp/smartlinks/listing?search=amm')
+        ->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Gamma');
+
+    $this->actingAs($user)->getJson('/cp/smartlinks/listing?sort=title&order=desc&perPage=2&page=2')
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.title', 'Alpha')
+        ->assertJsonPath('meta.from', 3)
+        ->assertJsonPath('meta.total', 3)
+        ->assertJsonPath('meta.last_page', 2);
+
+    $this->actingAs($user)->getJson('/cp/smartlinks/listing?columns=title,links')
+        ->assertJsonPath('meta.columns.2.field', 'links')
+        ->assertJsonPath('meta.columns.2.visible', true)
+        ->assertJsonPath('meta.columns.1.visible', false);
 });
 
 it('refuses the page without view smartlinks', function () {
@@ -91,6 +138,11 @@ it('refuses the page without view smartlinks', function () {
     // Core turns a failed `can:` in the CP into a redirect with an error toast.
     expect($response->status())->toBeIn([302, 403])
         ->and($response->headers->get('X-Inertia'))->toBeNull();
+
+    $this->makeSong('A', ['https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK']);
+    $listing = $this->actingAs(cpUser([]))->getJson('/cp/smartlinks/listing');
+    expect($listing->status())->toBeIn([302, 403])
+        ->and($listing->json('data'))->toBeNull();
 });
 
 it('registers the permission and the nav item', function () {
@@ -110,10 +162,33 @@ it('renders the links tag with platform, url, label, icon and click url', functi
         true
     );
 
+    // Apple Music before Tidal: priority, not stored order.
     expect($out)->toBe(
-        '[tidal|Tidal|tidal|https://listen.tidal.com/track/1|http://localhost/hoeren/alles-wird-gut/tidal]'
-        .'[applemusic|Apple Music|applemusic|https://geo.music.apple.com/de/album/x/1|http://localhost/hoeren/alles-wird-gut/applemusic]'
+        '[applemusic|Apple Music|applemusic|https://geo.music.apple.com/de/album/x/1|http://localhost/hoeren/alles-wird-gut/applemusic]'
+        .'[tidal|Tidal|tidal|https://listen.tidal.com/track/1|http://localhost/hoeren/alles-wird-gut/tidal]'
     );
+});
+
+it('orders links by the configured priority, then alphabetically, other last', function () {
+    $song = $this->makeSong('Reihenfolge', [
+        'https://example.com/merch',
+        'https://www.boomplay.com/songs/1',
+        'https://www.amazon.de/dp/B0',
+        'https://listen.tidal.com/track/1',
+        'https://www.anghami.com/song/1',
+        'https://music.youtube.com/watch?v=yG4VfxlXbIc',
+        'https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK',
+    ]);
+
+    $order = fn () => array_map(fn ($l) => $l->platform, Smartlinks::links($song));
+
+    expect($order())->toBe(['spotify', 'youtubemusic', 'tidal', 'amazon', 'anghami', 'boomplay', 'other']);
+
+    // Handles with underscores work as the config reads naturally.
+    config(['smartlinks.priority' => ['amazon', 'youtube_music']]);
+    expect($order())->toBe(['amazon', 'youtubemusic', 'anghami', 'boomplay', 'spotify', 'tidal', 'other']);
+
+    $this->get('/hoeren/reihenfolge')->assertSeeInOrder(['Amazon', 'YouTube Music', 'Anghami', 'Boomplay', 'Spotify', 'Tidal']);
 });
 
 it('renders the url tag for one platform, from the context entry too', function () {

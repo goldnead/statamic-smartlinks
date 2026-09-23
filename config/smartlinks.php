@@ -61,6 +61,17 @@ return [
     'platforms' => [],
 
     /*
+    | The order of the buttons on the landing page and in {{ smartlinks:links }}.
+    | Platforms not listed follow alphabetically, "other" last. Stored row
+    | order does not matter.
+    */
+
+    'priority' => [
+        'spotify', 'applemusic', 'youtubemusic', 'amazonmusic', 'deezer',
+        'tidal', 'youtube', 'soundcloud', 'bandcamp', 'amazon',
+    ],
+
+    /*
     |--------------------------------------------------------------------------
     | Front-end routes
     |--------------------------------------------------------------------------

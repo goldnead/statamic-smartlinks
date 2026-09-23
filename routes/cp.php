@@ -11,4 +11,5 @@ if (! config('smartlinks.cp.enabled', true)) {
 
 Route::middleware('can:view smartlinks')->group(function (): void {
     Route::get('smartlinks', [SmartlinksController::class, 'index'])->name('smartlinks.index');
+    Route::get('smartlinks/listing', [SmartlinksController::class, 'listing'])->name('smartlinks.listing');
 });

@@ -41,12 +41,48 @@ class Smartlinks
     }
 
     /**
-     * The entry's links, one per platform, in stored order. The first link of
-     * a platform wins; rows that are not http(s) URLs are skipped.
+     * The entry's links, one per platform, ordered by `smartlinks.priority`,
+     * then the rest alphabetically, `other` last. The first stored link of a
+     * platform wins; rows that are not http(s) URLs are skipped.
      *
      * @return list<Link>
      */
     public function links(Entry $entry): array
+    {
+        $links = $this->storedLinks($entry);
+        $rank = $this->priority();
+
+        usort($links, function (Link $a, Link $b) use ($rank): int {
+            $ra = $rank[$a->platform] ?? ($a->platform === Platforms::OTHER ? PHP_INT_MAX : PHP_INT_MAX - 1);
+            $rb = $rank[$b->platform] ?? ($b->platform === Platforms::OTHER ? PHP_INT_MAX : PHP_INT_MAX - 1);
+
+            return $ra <=> $rb ?: strcmp($a->platform, $b->platform);
+        });
+
+        return $links;
+    }
+
+    /**
+     * platform => position. Handles are accepted with or without underscores
+     * (`apple_music` is `applemusic`).
+     *
+     * @return array<string, int>
+     */
+    protected function priority(): array
+    {
+        $rank = [];
+
+        foreach (array_values((array) config('smartlinks.priority', [])) as $i => $platform) {
+            $rank[str_replace('_', '', strtolower((string) $platform))] ??= $i;
+        }
+
+        return $rank;
+    }
+
+    /**
+     * @return list<Link>
+     */
+    protected function storedLinks(Entry $entry): array
     {
         $links = [];
 
