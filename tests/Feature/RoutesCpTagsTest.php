@@ -76,9 +76,10 @@ it('shows clicks per song and platform over the last 30 days', function () {
             ->where('days', 30)
             ->where('hasSongs', true)
             ->where('listingUrl', cp_route('smartlinks.listing'))
-            ->has('initialColumns', 5)
-            ->where('initialColumns.3.field', 'platform_spotify')
-            ->where('initialColumns.3.label', 'Spotify'));
+            // title, total, links, dead, suggestions, then the platforms
+            ->has('initialColumns', 7)
+            ->where('initialColumns.5.field', 'platform_spotify')
+            ->where('initialColumns.5.label', 'Spotify'));
 
     $this->actingAs($user)->getJson('/cp/smartlinks/listing')
         ->assertOk()
@@ -95,7 +96,7 @@ it('shows clicks per song and platform over the last 30 days', function () {
         ->assertJsonPath('meta.total', 2)
         ->assertJsonPath('meta.current_page', 1)
         ->assertJsonPath('meta.last_page', 1)
-        ->assertJsonCount(5, 'meta.columns');
+        ->assertJsonCount(7, 'meta.columns');
 });
 
 it('keeps few columns visible by default, like core, so a phone fits title and row menu', function () {

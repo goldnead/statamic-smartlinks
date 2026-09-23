@@ -98,8 +98,11 @@ class ServiceProvider extends AddonServiceProvider
     {
         Permission::extend(function (): void {
             Permission::group('smartlinks', __('smartlinks::cp.nav'), function (): void {
-                Permission::register('view smartlinks')
-                    ->label(__('smartlinks::cp.permission_view'));
+                Permission::register('view smartlinks', function ($permission): void {
+                    $permission->children([
+                        Permission::make('manage smartlinks')->label(__('smartlinks::cp.permission_manage')),
+                    ]);
+                })->label(__('smartlinks::cp.permission_view'));
             });
         });
 

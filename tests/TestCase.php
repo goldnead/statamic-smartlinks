@@ -4,6 +4,7 @@ namespace Goldnead\Smartlinks\Tests;
 
 use Goldnead\Smartlinks\Fieldtypes\SmartlinkUrl;
 use Goldnead\Smartlinks\Resolvers\ItunesClient;
+use Goldnead\Smartlinks\Scopes\LinkState;
 use Goldnead\Smartlinks\ServiceProvider;
 use Goldnead\Smartlinks\Tags\Smartlinks;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -44,6 +45,7 @@ abstract class TestCase extends AddonTestCase
         Smartlinks::register();
         ItunesClient::resetPacing();
         SmartlinkUrl::register();
+        LinkState::register();
 
         if (! Collection::find('songs')) {
             Collection::make('songs')->title('Songs')->save();

@@ -13,3 +13,12 @@ Route::middleware('can:view smartlinks')->group(function (): void {
     Route::get('smartlinks', [SmartlinksController::class, 'index'])->name('smartlinks.index');
     Route::get('smartlinks/listing', [SmartlinksController::class, 'listing'])->name('smartlinks.listing');
 });
+
+Route::middleware('can:manage smartlinks')->group(function (): void {
+    Route::post('smartlinks/suggestions/{suggestion}/accept', [SmartlinksController::class, 'accept'])
+        ->whereNumber('suggestion')
+        ->name('smartlinks.suggestions.accept');
+    Route::post('smartlinks/suggestions/{suggestion}/reject', [SmartlinksController::class, 'reject'])
+        ->whereNumber('suggestion')
+        ->name('smartlinks.suggestions.reject');
+});

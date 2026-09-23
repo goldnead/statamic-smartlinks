@@ -2,8 +2,12 @@
 
 namespace Goldnead\Smartlinks\Http\Controllers\Cp;
 
+use Goldnead\Smartlinks\LinkStatus;
+use Goldnead\Smartlinks\Scopes\LinkState;
 use Goldnead\Smartlinks\Smartlinks;
+use Goldnead\Smartlinks\Suggestions;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -15,6 +19,7 @@ use Inertia\Response;
 use Statamic\CP\Column;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Entry as Entries;
+use Statamic\Facades\Scope;
 use Statamic\Http\Controllers\CP\CpController;
 use Statamic\Statamic;
 
@@ -60,10 +65,44 @@ class SmartlinksController extends CpController
 
         return Inertia::render('smartlinks::Smartlinks/Index', [
             'initialColumns' => $this->columnsArray($smartlinks, $platforms, null),
+            'filters' => Scope::filters('smartlinks'),
             'hasSongs' => $this->entries($smartlinks)->isNotEmpty(),
             'listingUrl' => cp_route('smartlinks.listing'),
             'days' => $days,
         ]);
+    }
+
+    public function accept(Smartlinks $smartlinks, Suggestions $suggestions, int $suggestion): RedirectResponse
+    {
+        Gate::authorize('manage smartlinks');
+
+        $row = $suggestions->find($suggestion);
+        $entry = $row && $row->status === Suggestions::PENDING ? Entries::find((string) $row->entry_id) : null;
+
+        if (! $row || ! $entry instanceof Entry || ! $smartlinks->handles($entry)) {
+            abort(404);
+        }
+
+        $smartlinks->appendLinks($entry, [['platform' => (string) $row->platform, 'url' => (string) $row->url]]);
+        $suggestions->mark($suggestion, Suggestions::ACCEPTED);
+
+        return redirect()->to(cp_route('smartlinks.index'))
+            ->with('success', __('smartlinks::cp.accepted', ['platform' => $smartlinks->platforms()->label((string) $row->platform)]));
+    }
+
+    public function reject(Suggestions $suggestions, int $suggestion): RedirectResponse
+    {
+        Gate::authorize('manage smartlinks');
+
+        $row = $suggestions->find($suggestion);
+
+        if (! $row || $row->status !== Suggestions::PENDING) {
+            abort(404);
+        }
+
+        $suggestions->mark($suggestion, Suggestions::REJECTED);
+
+        return redirect()->to(cp_route('smartlinks.index'))->with('success', __('smartlinks::cp.rejected'));
     }
 
     /**
@@ -76,15 +115,31 @@ class SmartlinksController extends CpController
 
         $clicks = Schema::hasTable(Smartlinks::TABLE) ? $smartlinks->clicks($this->days()) : [];
         [$platforms] = $this->platformTotals($smartlinks, $clicks);
+        $dead = app(LinkStatus::class)->deadCounts();
+        $pending = Schema::hasTable(Suggestions::TABLE) ? collect(app(Suggestions::class)->pending())->groupBy('entry_id') : collect();
+        $canManage = Gate::allows('manage smartlinks');
 
-        $rows = $this->entries($smartlinks)->map(function (Entry $entry) use ($clicks, $platforms, $smartlinks) {
-            $counts = $clicks[(string) $entry->id()] ?? [];
+        $rows = $this->entries($smartlinks)->map(function (Entry $entry) use ($clicks, $platforms, $smartlinks, $dead, $pending, $canManage) {
+            $id = (string) $entry->id();
+            $counts = $clicks[$id] ?? [];
+            $suggestions = $pending->get($id, collect())->map(fn (object $s) => [
+                'id' => (int) $s->id,
+                'platform' => (string) $s->platform,
+                'label' => $smartlinks->platforms()->label((string) $s->platform),
+                'url' => (string) $s->url,
+                'accept_url' => $canManage ? cp_route('smartlinks.suggestions.accept', $s->id) : null,
+                'reject_url' => $canManage ? cp_route('smartlinks.suggestions.reject', $s->id) : null,
+            ])->values()->all();
+
             $row = [
-                'id' => (string) $entry->id(),
+                'id' => $id,
                 'title' => (string) $entry->value('title'),
                 'edit_url' => $entry->editUrl(),
                 'landing_url' => $smartlinks->landingUrl($entry),
                 'links' => count($smartlinks->links($entry)),
+                'dead' => $dead[$id] ?? 0,
+                'suggestions' => count($suggestions),
+                'suggestion_items' => $suggestions,
                 'total' => array_sum($counts),
             ];
 
@@ -98,6 +153,16 @@ class SmartlinksController extends CpController
         $search = mb_strtolower(trim((string) $request->input('search', '')));
         if ($search !== '') {
             $rows = $rows->filter(fn (array $row) => str_contains(mb_strtolower($row['title']), $search));
+        }
+
+        // Core's filter contract: base64 JSON, {"link_state": {"state": "dead"}}.
+        $filters = json_decode((string) base64_decode((string) $request->input('filters', ''), true), true);
+        $state = is_array($filters) ? data_get($filters, 'link_state.state') : null;
+        $badges = [];
+
+        if ($state === 'dead' || $state === 'suggested') {
+            $rows = $rows->filter(fn (array $row) => $row[$state === 'dead' ? 'dead' : 'suggestions'] > 0);
+            $badges['link_state'] = (new LinkState)->badge(['state' => $state]);
         }
 
         $columns = $this->columnsArray($smartlinks, $platforms, $request->input('columns'));
@@ -120,7 +185,7 @@ class SmartlinksController extends CpController
             'data' => $paginator->items(),
             'meta' => [
                 'columns' => $columns,
-                'activeFilterBadges' => [],
+                'activeFilterBadges' => (object) $badges,
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
                 'per_page' => $paginator->perPage(),
@@ -181,6 +246,9 @@ class SmartlinksController extends CpController
             Column::make('title')->label(__('smartlinks::cp.col_title')),
             Column::make('total')->label(__('smartlinks::cp.col_total'))->numeric(true),
             Column::make('links')->label(__('smartlinks::cp.col_links'))->numeric(true)->defaultVisibility(false)->visible(false),
+            // Shown as badges in the title cell; as columns on request.
+            Column::make('dead')->label(__('smartlinks::cp.col_dead'))->numeric(true)->defaultVisibility(false)->visible(false),
+            Column::make('suggestions')->label(__('smartlinks::cp.col_suggestions'))->numeric(true)->defaultVisibility(false)->visible(false),
         ];
 
         foreach ($platforms as $i => $platform) {
