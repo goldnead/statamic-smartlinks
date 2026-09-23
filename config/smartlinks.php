@@ -147,6 +147,9 @@ return [
         'enabled' => (bool) env('SMARTLINKS_ROUTES_ENABLED', true),
         'prefix' => 'hoeren',
         'view' => 'smartlinks::landing',
+        // collection => URL segment after the prefix. Default: release
+        // collections under `release`, songs at the prefix ('').
+        'segments' => [],
     ],
 
     /*

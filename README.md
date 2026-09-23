@@ -76,8 +76,18 @@ with underscores (`apple_music`).
 
 | | |
 |---|---|
-| `GET /hoeren/{slug}` | the landing page (`noindex`) |
+| `GET /hoeren/{slug}` | a song's landing page (`noindex`) |
 | `GET /hoeren/{slug}/{platform}` | 302 to the stored URL, click counted |
+| `GET /hoeren/release/{slug}` (and `/{platform}`) | the same for a release |
+
+**One segment per collection.** Songs sit at the prefix, collections in `release_collections`
+under `release/`, so a song and its single can share a slug (on anders-band.de five pairs do,
+e.g. `alles-wird-gut`). `smartlinks.routes.segments` sets it per collection, e.g.
+`['releases' => 'album', 'songs' => '']`; an empty segment mounts at the prefix. A slug is
+looked up only in the collections of its segment, one after the other in config order, so two
+collections at the same segment always resolve the same way. `{{ smartlinks:page }}`,
+`click_url` and the CP link each entry on its own route. A song whose slug equals a segment
+(`release`) is shadowed by that segment's routes.
 
 - The redirect only ever goes to a URL stored on the entry. An unknown slug, an unpublished song,
   a platform the song has no link for, or a stored value that is not `http(s)` is a 404.
@@ -132,7 +142,16 @@ for your own icon set. `click_url` is null when the routes are off; fall back to
 php artisan smartlinks:resolve --dry-run      # what would be added
 php artisan smartlinks:resolve                # all songs
 php artisan smartlinks:resolve alles-wird-gut # one, by slug or ID
+php artisan smartlinks:resolve --replace-dead  # also replace confirmed dead links
 ```
+
+Every platform the song holds a link for counts as present, dead or not: resolve never adds a
+second one. With `--replace-dead` (off by default), a platform whose links are all confirmed
+dead (two dead checks in a row, see [Dead links](#dead-links)) is asked again, and a found link
+goes into the dead link's row, its other columns kept; the dead link's check history goes.
+`suspect` and `unknown` links are never touched. Each replacement is logged
+(`smartlinks: replaced dead link`, old and new URL). A nightly pair:
+`smartlinks:check` at 03:30, `smartlinks:resolve --replace-dead` at 04:30.
 
 **Exact, never by name.** First the song's identity: its ISRC (a release: its UPC). It comes from
 the `isrc_field`/`upc_field`, or from any link whose service gives it back: a Deezer link (free),

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.1 (2026-09-23)
+
+### Fixed
+- A song and a release with the same slug: releases now sit at `/hoeren/release/{slug}`
+  (segment per collection in `smartlinks.routes.segments`), each slug is looked up only in its
+  segment's collections, in config order. Song URLs are unchanged. `landingUrl()`, `clickUrl()`,
+  the tags and the CP build each entry's URL on its own route.
+
+### Added
+- `smartlinks:resolve --replace-dead`: a platform whose links are all confirmed dead is resolved
+  again and the found link goes into the dead link's row (other columns kept); its check
+  history is dropped; each replacement is logged. `suspect`/`unknown` links are never touched.
+
+### Changed
+- `smartlinks:resolve` counts every stored platform as present, dead or not; without
+  `--replace-dead` it no longer appends a second link next to a hidden dead one.
+
 ## 0.2.0 (2026-09-23)
 
 ### Added
