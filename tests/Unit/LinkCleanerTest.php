@@ -24,6 +24,34 @@ it('strips foreign affiliate and tracking parameters and normalises the URL form
     'not a URL is left alone' => ['javascript:alert(1)', 'javascript:alert(1)'],
 ]);
 
+it('leaves an URL it has nothing to remove from byte for byte alone', function (string $url) {
+    expect(app(LinkCleaner::class)->clean($url))->toBe($url)
+        ->and(app(LinkCleaner::class)->cleanRows([['url' => $url]], 'url')[1])->toBe(0);
+})->with([
+    'dots in keys' => ['https://www.boomplay.com/songs/1?a.b=1&x=%2F'],
+    'array-like keys' => ['https://example.com/p?list[]=1&list[]=2'],
+    'plus and encoding' => ['https://soundcloud.com/a/b?in=x+y%20z'],
+    'empty value' => ['https://example.com/p?flag'],
+]);
+
+it('removes only the unwanted pieces and keeps the rest as written', function () {
+    expect(app(LinkCleaner::class)->clean('https://www.boomplay.com/songs/1?a.b=1&utm_source=x&x=%2F'))
+        ->toBe('https://www.boomplay.com/songs/1?a.b=1&x=%2F');
+});
+
+it('drops rows that become duplicates after cleaning', function () {
+    [$rows, $changed] = app(LinkCleaner::class)->cleanRows([
+        ['platform' => 'applemusic', 'url' => 'https://geo.music.apple.com/de/album/_/1491803543?i=1491803545&mt=1&app=itunes&at=1000lHKX'],
+        ['platform' => 'applemusic', 'url' => 'https://geo.music.apple.com/de/album/_/1491803543?i=1491803545&mt=1&app=music&at=1000lHKX'],
+        ['platform' => 'deezer', 'url' => 'https://www.deezer.com/track/1'],
+    ], 'url');
+
+    expect($rows)->toBe([
+        ['platform' => 'applemusic', 'url' => 'https://music.apple.com/de/album/_/1491803543?i=1491803545'],
+        ['platform' => 'deezer', 'url' => 'https://www.deezer.com/track/1'],
+    ])->and($changed)->toBe(2);
+});
+
 it('keeps parameters on the allow-list, and strips extra ones from config', function () {
     config(['smartlinks.cleanup.keep' => ['at'], 'smartlinks.cleanup.strip' => ['from']]);
     $cleaner = new LinkCleaner;

@@ -44,7 +44,8 @@ class LinkCleaner
         $parts = parse_url($url);
         $host = strtolower((string) ($parts['host'] ?? ''));
         $path = (string) ($parts['path'] ?? '');
-        parse_str((string) ($parts['query'] ?? ''), $query);
+        $originalHost = $host;
+        $originalPath = $path;
         $platform = app(Platforms::class)->detect($url);
 
         switch ($platform) {
@@ -72,11 +73,16 @@ class LinkCleaner
         $strip = [...self::STRIP_ALWAYS, ...(self::STRIP_PER_PLATFORM[$platform] ?? []), ...(array) config('smartlinks.cleanup.strip', [])];
         $keep = array_map('strval', (array) config('smartlinks.cleanup.keep', []));
 
-        $query = array_filter($query, function ($value, $key) use ($strip, $keep) {
-            $key = (string) $key;
+        // The raw query, split by hand: parse_str() would rename keys
+        // (`a.b` → `a_b`) and re-encoding would change URLs that had nothing
+        // to remove. Only the key is decoded, for matching.
+        $raw = (string) ($parts['query'] ?? '');
+        $pieces = $raw === '' ? [] : explode('&', $raw);
+        $kept = array_values(array_filter($pieces, function (string $piece) use ($strip, $keep) {
+            $key = urldecode(explode('=', $piece, 2)[0]);
 
-            if (in_array($key, $keep, true)) {
-                return true;
+            if ($piece === '' || in_array($key, $keep, true)) {
+                return $piece !== '';
             }
 
             foreach ($strip as $pattern) {
@@ -87,28 +93,37 @@ class LinkCleaner
             }
 
             return true;
-        }, ARRAY_FILTER_USE_BOTH);
+        }));
+
+        if ($kept === $pieces && $host === $originalHost && $path === $originalPath) {
+            return $url;
+        }
 
         return strtolower((string) ($parts['scheme'] ?? 'https')).'://'.$host
             .(isset($parts['port']) ? ':'.$parts['port'] : '')
             .$path
-            .($query === [] ? '' : '?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986))
+            .($kept === [] ? '' : '?'.implode('&', $kept))
             .(isset($parts['fragment']) ? '#'.$parts['fragment'] : '');
     }
 
     /**
-     * Cleans every URL in a stored links value (Grid rows or a List) and
-     * says whether anything changed.
+     * Cleans every URL in a stored links value (Grid rows or a List). A row
+     * whose cleaned URL an earlier row already holds is dropped: Odesli
+     * stored every Apple link twice, `app=itunes` and `app=music`.
      *
-     * @return array{0: mixed, 1: int} the cleaned value and the number of changed URLs
+     * @return array{0: mixed, 1: int, 2: array<string, string>} the cleaned value, the number of
+     *                                                           changed or dropped rows, old URL => new URL
      */
     public function cleanRows(mixed $rows, string $urlKey): array
     {
         if (! is_array($rows)) {
-            return [$rows, 0];
+            return [$rows, 0, []];
         }
 
         $changed = 0;
+        $renamed = [];
+        $seen = [];
+        $list = array_is_list($rows);
 
         foreach ($rows as $i => $row) {
             $url = is_array($row) ? ($row[$urlKey] ?? null) : $row;
@@ -119,12 +134,23 @@ class LinkCleaner
 
             $clean = $this->clean($url);
 
+            if (isset($seen[$clean])) {
+                unset($rows[$i]);
+                $changed++;
+                $renamed[$url] = $clean;
+
+                continue;
+            }
+
+            $seen[$clean] = true;
+
             if ($clean !== $url) {
                 $changed++;
+                $renamed[$url] = $clean;
                 is_array($row) ? $rows[$i][$urlKey] = $clean : $rows[$i] = $clean;
             }
         }
 
-        return [$rows, $changed];
+        return [$list ? array_values($rows) : $rows, $changed, $renamed];
     }
 }

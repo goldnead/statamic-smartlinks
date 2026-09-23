@@ -3,6 +3,7 @@
 namespace Goldnead\Smartlinks\Console\Commands;
 
 use Goldnead\Smartlinks\LinkCleaner;
+use Goldnead\Smartlinks\LinkStatus;
 use Goldnead\Smartlinks\Smartlinks;
 use Illuminate\Console\Command;
 use Statamic\Entries\Entry;
@@ -18,7 +19,7 @@ class Clean extends Command
 
     protected $description = 'Strip affiliate and tracking parameters from stored streaming links and normalise their form';
 
-    public function handle(Smartlinks $smartlinks, LinkCleaner $cleaner): int
+    public function handle(Smartlinks $smartlinks, LinkCleaner $cleaner, LinkStatus $statuses): int
     {
         $dryRun = (bool) $this->option('dry-run');
         $field = (string) config('smartlinks.field', 'streaming_links');
@@ -37,7 +38,7 @@ class Clean extends Command
             }
 
             $before = $entry->get($field);
-            [$rows, $changed] = $cleaner->cleanRows($before, $key);
+            [$rows, $changed, $renamed] = $cleaner->cleanRows($before, $key);
 
             if ($changed === 0) {
                 continue;
@@ -52,6 +53,7 @@ class Clean extends Command
 
             if (! $dryRun) {
                 $entry->set($field, $rows)->saveQuietly();
+                $statuses->sync((string) $entry->id(), $renamed, $smartlinks->storedUrls($entry));
             }
         }
 

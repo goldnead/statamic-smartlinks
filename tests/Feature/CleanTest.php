@@ -1,5 +1,7 @@
 <?php
 
+use Goldnead\Smartlinks\LinkStatus;
+use Illuminate\Support\Facades\DB;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 
@@ -23,6 +25,28 @@ it('leaves links alone on save when switched off, and in other collections', fun
     $page = Entry::make()->collection('pages')->slug('p')->data(['streaming_links' => [['url' => ODESLI_APPLE]]]);
     $page->save();
     expect(Entry::find($page->id())->get('streaming_links')[0]['url'])->toBe(ODESLI_APPLE);
+});
+
+it('carries a link\'s check history to its cleaned URL and drops rows of links that are gone', function () {
+    config(['smartlinks.cleanup.on_save' => false]);
+    $song = $this->makeSong('Alt', [ODESLI_APPLE, 'https://www.deezer.com/track/1']);
+    config(['smartlinks.cleanup.on_save' => true]);
+    $status = app(LinkStatus::class);
+    $status->record((string) $song->id(), ODESLI_APPLE, 'dead', 404);
+    $status->record((string) $song->id(), ODESLI_APPLE, 'dead', 404);
+    $status->record((string) $song->id(), 'https://removed.test/x', 'ok', 200);
+
+    $this->artisan('smartlinks:clean')->assertSuccessful();
+
+    expect($status->dead((string) $song->id()))->toBe(['https://music.apple.com/de/album/_/1491803543?i=1491803545'])
+        ->and(DB::table('smartlinks_link_status')->count())->toBe(1);
+
+    // Saving from the CP keeps them in step as well.
+    $status->record((string) $song->id(), 'https://www.deezer.com/track/1', 'ok', 200);
+    $fresh = Entry::find($song->id());
+    $fresh->set('streaming_links', [['url' => 'https://www.deezer.com/de/track/1']])->save();
+
+    expect(DB::table('smartlinks_link_status')->pluck('url')->all())->toBe(['https://www.deezer.com/track/1']);
 });
 
 it('cleans existing data with smartlinks:clean, dry run first', function () {

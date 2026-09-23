@@ -3,6 +3,7 @@
 namespace Goldnead\Smartlinks\Listeners;
 
 use Goldnead\Smartlinks\LinkCleaner;
+use Goldnead\Smartlinks\LinkStatus;
 use Goldnead\Smartlinks\Smartlinks;
 use Statamic\Entries\Entry;
 use Statamic\Events\EntrySaving;
@@ -14,7 +15,11 @@ use Statamic\Events\EntrySaving;
  */
 class CleanLinksOnSave
 {
-    public function __construct(protected Smartlinks $smartlinks, protected LinkCleaner $cleaner) {}
+    public function __construct(
+        protected Smartlinks $smartlinks,
+        protected LinkCleaner $cleaner,
+        protected LinkStatus $statuses,
+    ) {}
 
     public function handle(EntrySaving $event): void
     {
@@ -30,10 +35,15 @@ class CleanLinksOnSave
             return;
         }
 
-        [$rows, $changed] = $this->cleaner->cleanRows($entry->get($field), (string) config('smartlinks.url_key', 'url'));
+        [$rows, $changed, $renamed] = $this->cleaner->cleanRows($entry->get($field), (string) config('smartlinks.url_key', 'url'));
 
         if ($changed > 0) {
             $entry->set($field, $rows);
+        }
+
+        // Check history follows a rewritten URL; rows of removed links go.
+        if ($entry->id() !== null) {
+            $this->statuses->sync((string) $entry->id(), $renamed, $this->smartlinks->storedUrls($entry));
         }
     }
 }
