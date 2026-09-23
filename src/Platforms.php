@@ -20,11 +20,17 @@ class Platforms
      * @var array<string, array{label: string, hosts: list<string>}>
      */
     public const BUILT_IN = [
-        'spotify' => ['label' => 'Spotify', 'hosts' => ['spotify.com', 'spotify.link', 'tospotify.com']],
-        'applemusic' => ['label' => 'Apple Music', 'hosts' => ['music.apple.com', 'itunes.apple.com']],
+        'spotify' => ['label' => 'Spotify', 'hosts' => ['spotify.com', 'spotify.link', 'spoti.fi', 'tospotify.com']],
+        'applemusic' => ['label' => 'Apple Music', 'hosts' => ['music.apple.com', 'itunes.apple.com', 'apple.co']],
         'amazonmusic' => ['label' => 'Amazon Music', 'hosts' => [
             'music.amazon.com', 'music.amazon.de', 'music.amazon.co.uk', 'music.amazon.fr',
-            'amazon.com', 'amazon.de', 'amazon.co.uk', 'amazon.fr', 'amazon.it', 'amazon.es', 'amazon.at',
+            'music.amazon.it', 'music.amazon.es', 'music.amazon.ca', 'music.amazon.co.jp',
+        ]],
+        // The shop (product pages, /dp/, /gp/), not the streaming service.
+        // anders-band.de's import folded both into amazonmusic.
+        'amazon' => ['label' => 'Amazon', 'hosts' => [
+            'amazon.com', 'amazon.de', 'amazon.co.uk', 'amazon.fr', 'amazon.it', 'amazon.es',
+            'amazon.at', 'amazon.ca', 'amazon.co.jp', 'amzn.to', 'amzn.eu',
         ]],
         'youtubemusic' => ['label' => 'YouTube Music', 'hosts' => ['music.youtube.com']],
         'youtube' => ['label' => 'YouTube', 'hosts' => ['youtube.com', 'youtu.be', 'youtube-nocookie.com']],
@@ -126,13 +132,17 @@ class Platforms
 
     /**
      * Only http and https URLs are links. A stored `javascript:` or `data:`
-     * value is never listed and never redirected to.
+     * value is never listed and never redirected to, and neither is one with
+     * userinfo (`https://open.spotify.com@evil.test/`), which reads like one
+     * host and goes to another.
      */
     public static function isWebUrl(string $url): bool
     {
         $url = trim($url);
 
-        return preg_match('~^https?://[^\s/?#]+~i', $url) === 1
-            && filter_var($url, FILTER_VALIDATE_URL) !== false;
+        return preg_match('~^https?://[^\s/?#@]+(?:[/?#]|$)~i', $url) === 1
+            && filter_var($url, FILTER_VALIDATE_URL) !== false
+            && parse_url($url, PHP_URL_USER) === null
+            && parse_url($url, PHP_URL_PASS) === null;
     }
 }

@@ -23,7 +23,14 @@ dataset('urls', [
     'Apple Music' => ['https://music.apple.com/de/album/x/123', 'applemusic'],
     'iTunes' => ['https://itunes.apple.com/de/album/x/id123', 'applemusic'],
     'Amazon Music' => ['https://music.amazon.de/albums/B0', 'amazonmusic'],
-    'Amazon shop' => ['https://www.amazon.de/dp/B0', 'amazonmusic'],
+    'Amazon Music com' => ['https://music.amazon.com/tracks/B0', 'amazonmusic'],
+    'Amazon shop dp' => ['https://www.amazon.de/dp/B0', 'amazon'],
+    'Amazon shop gp' => ['https://www.amazon.com/gp/product/B0', 'amazon'],
+    'spoti.fi short link' => ['https://spoti.fi/3abc', 'spotify'],
+    'spotify.link short link' => ['https://spotify.link/abc', 'spotify'],
+    'apple.co short link' => ['https://apple.co/3abc', 'applemusic'],
+    'userinfo pretending to be Spotify' => ['https://open.spotify.com@evil.test/track/1', 'other'],
+    'userinfo on a real host' => ['https://user:pass@open.spotify.com/track/1', 'other'],
     'SoundCloud' => ['https://soundcloud.com/anders/song', 'soundcloud'],
     'SoundCloud short' => ['https://on.soundcloud.com/abc', 'soundcloud'],
     'Bandcamp artist subdomain' => ['https://anders.bandcamp.com/track/song', 'bandcamp'],
@@ -43,6 +50,17 @@ dataset('urls', [
 it('detects the platform from the host alone', function (string $url, string $platform) {
     expect(app(Platforms::class)->detect($url))->toBe($platform);
 })->with('urls');
+
+it('labels the Amazon shop apart from Amazon Music', function () {
+    expect(app(Platforms::class)->label('amazon'))->toBe('Amazon')
+        ->and(app(Platforms::class)->label('amazonmusic'))->toBe('Amazon Music');
+});
+
+it('does not treat a URL with userinfo as a link', function () {
+    expect(Platforms::isWebUrl('https://user:pass@open.spotify.com/track/1'))->toBeFalse()
+        ->and(Platforms::isWebUrl('https://open.spotify.com@evil.test/'))->toBeFalse()
+        ->and(Platforms::isWebUrl('https://open.spotify.com/track/1?u=a@b'))->toBeTrue();
+});
 
 it('takes extra hosts from config, and the more specific host still wins', function () {
     $platforms = new Platforms(['audiomack' => ['audiomack.com'], 'deezer' => ['deezer.link']]);
