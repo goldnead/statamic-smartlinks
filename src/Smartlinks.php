@@ -2,8 +2,10 @@
 
 namespace Goldnead\Smartlinks;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Entry as Entries;
@@ -73,7 +75,8 @@ class Smartlinks
      */
     public function storedUrls(Entry $entry): array
     {
-        $rows = $entry->get((string) config('smartlinks.field', 'streaming_links'));
+        // value(), not get(): a localisation inherits the links of its origin.
+        $rows = $entry->value((string) config('smartlinks.field', 'streaming_links'));
         $key = (string) config('smartlinks.url_key', 'url');
         $urls = [];
 
@@ -145,7 +148,8 @@ class Smartlinks
     }
 
     /**
-     * An entry by ID, or by slug within the smart link collections.
+     * An entry by ID, or by slug within the smart link collections of the
+     * current site (a slug is only unique per site).
      */
     public function findEntry(string $idOrSlug): ?Entry
     {
@@ -159,9 +163,49 @@ class Smartlinks
         $bySlug = Entries::query()
             ->whereIn('collection', $this->collections())
             ->where('slug', $idOrSlug)
+            ->where('site', Site::current()->handle())
             ->first();
 
         return $bySlug;
+    }
+
+    /**
+     * A browser prefetch or prerender, not a person clicking.
+     */
+    public function isPrefetch(Request $request): bool
+    {
+        foreach (['Sec-Purpose', 'Purpose', 'X-Moz', 'X-Purpose'] as $header) {
+            if (str_contains(strtolower((string) $request->header($header)), 'prefetch')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * At most `smartlinks.clicks.per_minute` counted clicks per IP, song and
+     * platform. Beyond that the listener is still redirected, the click just
+     * is not counted. The IP is hashed into a cache key that expires after a
+     * minute; it never reaches the database.
+     */
+    public function withinCountLimit(Request $request, Entry $entry, string $platform): bool
+    {
+        $limit = (int) config('smartlinks.clicks.per_minute', 10);
+
+        if ($limit <= 0) {
+            return true;
+        }
+
+        $key = 'smartlinks:click:'.hash('sha256', $request->ip().'|'.$entry->id().'|'.$platform);
+
+        if (RateLimiter::tooManyAttempts($key, $limit)) {
+            return false;
+        }
+
+        RateLimiter::hit($key, 60);
+
+        return true;
     }
 
     public function isBot(?string $userAgent): bool

@@ -47,7 +47,7 @@ class SmartlinkController extends Controller
         $entry = $this->smartlinks->findBySlug($slug) ?? throw new NotFoundHttpException;
         $url = $this->smartlinks->url($entry, $platform) ?? throw new NotFoundHttpException;
 
-        if ($this->shouldCount($request)) {
+        if ($this->shouldCount($request) && $this->smartlinks->withinCountLimit($request, $entry, $platform)) {
             try {
                 $this->smartlinks->recordClick($entry, $platform);
             } catch (Throwable $e) {
@@ -69,6 +69,7 @@ class SmartlinkController extends Controller
     {
         return config('smartlinks.clicks.enabled', true)
             && ! $request->isMethod('HEAD')
+            && ! $this->smartlinks->isPrefetch($request)
             && ! $this->smartlinks->isBot($request->userAgent());
     }
 

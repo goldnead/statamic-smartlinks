@@ -91,6 +91,57 @@ it('does not count HEAD requests', function () {
     expect(clickRows())->toBe([]);
 });
 
+it('does not count browser prefetches', function (string $header, string $value) {
+    $this->makeSong('Alles wird gut', ['https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK']);
+
+    $this->withHeaders(['User-Agent' => BROWSER, $header => $value])->get('/hoeren/alles-wird-gut/spotify')->assertStatus(302);
+
+    expect(clickRows())->toBe([]);
+})->with([
+    'Sec-Purpose' => ['Sec-Purpose', 'prefetch'],
+    'Sec-Purpose prerender' => ['Sec-Purpose', 'prefetch;prerender'],
+    'Purpose' => ['Purpose', 'prefetch'],
+    'X-Moz' => ['X-Moz', 'prefetch'],
+]);
+
+it('never throttles a venue full of listeners, only caps counting per IP, song and platform', function () {
+    config(['smartlinks.clicks.per_minute' => 5]);
+    $song = $this->makeSong('Alles wird gut', [
+        'https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK',
+        'https://www.deezer.com/track/1',
+    ]);
+
+    // One shared venue IP, a QR code on the stage.
+    foreach (range(1, 80) as $i) {
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.7'])
+            ->withHeader('User-Agent', BROWSER)->get('/hoeren/alles-wird-gut/spotify')->assertStatus(302);
+    }
+    foreach (range(1, 80) as $i) {
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.7'])->get('/hoeren/alles-wird-gut')->assertOk();
+    }
+    $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.7'])
+        ->withHeader('User-Agent', BROWSER)->get('/hoeren/alles-wird-gut/deezer');
+    $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.1'])
+        ->withHeader('User-Agent', BROWSER)->get('/hoeren/alles-wird-gut/spotify');
+
+    expect(clickRows())->toBe([
+        [(string) $song->id(), 'deezer', 1],
+        [(string) $song->id(), 'spotify', 6],
+    ]);
+
+    $this->travel(61)->seconds();
+    $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.7'])
+        ->withHeader('User-Agent', BROWSER)->get('/hoeren/alles-wird-gut/spotify');
+    expect(clickRows()[1][2])->toBe(7);
+});
+
+it('does not redirect to a stored URL carrying userinfo', function () {
+    $this->makeSong('Trick', ['https://open.spotify.com@evil.test/track/1']);
+
+    $this->withHeader('User-Agent', BROWSER)->get('/hoeren/trick/other')->assertNotFound();
+    $this->withHeader('User-Agent', BROWSER)->get('/hoeren/trick/spotify')->assertNotFound();
+});
+
 it('counts per song, platform and day in one row each, storing nothing about the listener', function () {
     $a = $this->makeSong('A', ['https://open.spotify.com/track/1w0r0NDXEByTCr7wa5HjNK', 'https://www.deezer.com/track/1']);
     $b = $this->makeSong('B', ['https://open.spotify.com/track/2w0r0NDXEByTCr7wa5HjNK']);

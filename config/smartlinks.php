@@ -37,6 +37,17 @@ return [
     'isrc_field' => null,
 
     /*
+    | Where `smartlinks:resolve` writes the platform of a link it adds, next
+    | to the URL, for templates that render a row's `platform`. The addon
+    | itself never reads it back. `platform_value` is `handle` (spotify, as
+    | anders-band.de's rows hold it) or `label` (Spotify). null: URL only.
+    */
+
+    'platform_key' => 'platform',
+
+    'platform_value' => 'handle',
+
+    /*
     |--------------------------------------------------------------------------
     | Extra hosts
     |--------------------------------------------------------------------------
@@ -61,12 +72,14 @@ return [
     | the request becomes a location. `view` is any Blade or Antlers view; it
     | receives `entry`, `title` and `links`.
     |
+    | Deliberately not throttled: a room full of people scanning one QR code
+    | shares the venue's IP. Only the counting is capped, see below.
+    |
     */
 
     'routes' => [
         'enabled' => (bool) env('SMARTLINKS_ROUTES_ENABLED', true),
         'prefix' => 'hoeren',
-        'throttle' => '60,1',
         'view' => 'smartlinks::landing',
     ],
 
@@ -78,12 +91,19 @@ return [
     | One counter per song, platform and day in `smartlinks_clicks`. No IP, no
     | cookie, no user agent is stored. Requests whose user agent is empty or
     | contains one of `bots` (case-insensitive) are redirected but not counted,
-    | and so are HEAD requests, which link previews send.
+    | and so are HEAD requests, which link previews send, and browser
+    | prefetches (Sec-Purpose / Purpose / X-Moz: prefetch).
+    |
+    | `per_minute` caps counted clicks per IP, song and platform; beyond it
+    | the listener is still redirected, uncounted. 0 = no cap. `prune_days`
+    | is the default for `smartlinks:prune`.
     |
     */
 
     'clicks' => [
         'enabled' => true,
+        'per_minute' => 10,
+        'prune_days' => 400,
         'bots' => [
             'bot', 'crawl', 'spider', 'slurp', 'preview', 'facebookexternalhit',
             'whatsapp', 'telegram', 'curl', 'wget', 'python-requests', 'headless',

@@ -6,15 +6,18 @@ use Illuminate\Support\Facades\Route;
 /*
  * Mounted by Statamic inside the `web` group.
  *
+ * Not throttled: at a concert a whole room scans the same QR code through one
+ * venue IP, and every one of them must get through. Only the counting is
+ * capped (smartlinks.clicks.per_minute); the pages themselves are cheap reads.
+ *
  * `smartlinks.routes.enabled` switches both off. Checked here, so a disabled
  * route does not exist, and again in the controller, so a route cache built
  * while it was on cannot keep it open.
  */
 if (config('smartlinks.routes.enabled', true)) {
     $prefix = trim((string) config('smartlinks.routes.prefix', 'hoeren'), '/');
-    $throttle = 'throttle:'.config('smartlinks.routes.throttle', '60,1');
 
-    Route::prefix($prefix)->middleware($throttle)->group(function (): void {
+    Route::prefix($prefix)->group(function (): void {
         Route::get('{slug}', [SmartlinkController::class, 'show'])
             ->where('slug', '[A-Za-z0-9_-]+')
             ->name('smartlinks.show');
