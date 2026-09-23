@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\Http;
  * Spotify's Web API with the client-credentials flow: no user, no consent
  * screen, only public catalogue data. Needs SPOTIFY_CLIENT_ID and
  * SPOTIFY_CLIENT_SECRET.
+ *
+ * Since February 2026 an app in Development Mode needs a Premium account
+ * as owner and gets at most 10 search results; `market` is always sent,
+ * without it catalogue content counts as unavailable.
  */
 class SpotifyClient
 {
@@ -25,9 +29,10 @@ class SpotifyClient
     }
 
     /**
-     * Fills ISRC, title and artist from the track. Returns a Resolution
-     * reason code: `found`, `not_configured`, `missing_input`, `not_found`
-     * or `http_error`.
+     * Fills ISRC (or, for a release, UPC), title and artist from the
+     * track or album. Returns a Resolution reason code: `found`,
+     * `not_configured`, `missing_input`, `not_found`, `rate_limited` or
+     * `http_error`.
      */
     public function enrich(Track $track): string
     {
@@ -40,45 +45,102 @@ class SpotifyClient
         }
 
         try {
-            $response = $this->fetchTrack($track->spotifyId);
-
-            // A cached token can die before its expiry (revoked, rotated
-            // secret). Forget it and try once more with a fresh one.
-            if ($response?->status() === 401) {
-                Cache::forget($this->cacheKey());
-                $response = $this->fetchTrack($track->spotifyId);
-
-                if ($response?->status() === 401) {
-                    Cache::forget($this->cacheKey());
-                }
-            }
-        } catch (ConnectionException) {
-            return Resolution::HTTP_ERROR;
+            $data = $this->get(($track->album ? '/albums/' : '/tracks/').$track->spotifyId);
+        } catch (ServiceError $e) {
+            return $e->reason;
         }
 
-        if ($response === null) {
-            return Resolution::HTTP_ERROR;
-        }
-
-        if ($response->status() === 404 || $response->status() === 400) {
+        if ($data === null) {
             return Resolution::NOT_FOUND;
         }
 
-        if (! $response->successful()) {
-            return Resolution::HTTP_ERROR;
+        if ($track->album) {
+            $track->upc ??= Track::normaliseUpc(data_get($data, 'external_ids.upc') ?? data_get($data, 'external_ids.ean'));
+        } else {
+            $track->isrc ??= Track::normaliseIsrc(data_get($data, 'external_ids.isrc'));
         }
 
-        $track->isrc ??= Track::normaliseIsrc($response->json('external_ids.isrc'));
-        $track->title ??= $response->json('name');
-        $track->artist ??= $response->json('artists.0.name');
+        $track->title ??= data_get($data, 'name');
+        $track->artist ??= data_get($data, 'artists.0.name');
 
         return Resolution::FOUND;
     }
 
     /**
-     * The track, or null when no token could be had.
+     * The first search hit for `isrc:…` (type track) or `upc:…` (type album),
+     * or null.
+     *
+     * @return array<string, mixed>|null
      */
-    protected function fetchTrack(string $id): ?Response
+    public function search(string $type, string $query): ?array
+    {
+        $data = $this->get('/search', [
+            'q' => $query,
+            'type' => $type,
+            'limit' => 5,
+        ]);
+
+        $item = data_get($data, $type.'s.items.0');
+
+        return is_array($item) ? $item : null;
+    }
+
+    /**
+     * A GET with the app token; after a 401 once more with a fresh token.
+     * null for 404/400.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>|null
+     */
+    public function get(string $path, array $query = []): ?array
+    {
+        $query = array_filter([...$query, 'market' => $this->market()]);
+
+        try {
+            $response = $this->send($path, $query);
+
+            // A cached token can die before its expiry (revoked, rotated
+            // secret). Forget it and try once more with a fresh one.
+            if ($response?->status() === 401) {
+                Cache::forget($this->cacheKey());
+                $response = $this->send($path, $query);
+
+                if ($response?->status() === 401) {
+                    Cache::forget($this->cacheKey());
+                }
+            }
+        } catch (ConnectionException $e) {
+            throw new ServiceError(Resolution::HTTP_ERROR, 'spotify: '.$e->getMessage());
+        }
+
+        if ($response === null) {
+            throw new ServiceError(Resolution::HTTP_ERROR, 'spotify: no token');
+        }
+
+        if ($response->status() === 404 || $response->status() === 400) {
+            return null;
+        }
+
+        if (! $response->successful()) {
+            throw ServiceError::http('spotify', $response->status());
+        }
+
+        $data = $response->json();
+
+        return is_array($data) ? $data : null;
+    }
+
+    protected function market(): ?string
+    {
+        $market = config('smartlinks.services.spotify.market') ?: config('smartlinks.country');
+
+        return is_string($market) && $market !== '' ? strtoupper($market) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     */
+    protected function send(string $path, array $query): ?Response
     {
         $token = $this->token();
 
@@ -89,9 +151,7 @@ class SpotifyClient
         return Http::withToken($token)
             ->timeout((int) config('smartlinks.services.timeout', 10))
             ->acceptJson()
-            ->get(self::API_URL.'/tracks/'.$id, array_filter([
-                'market' => config('smartlinks.services.spotify.market'),
-            ]));
+            ->get(self::API_URL.$path, $query);
     }
 
     /**

@@ -32,7 +32,63 @@ class Smartlinks
      */
     public function collections(): array
     {
-        return array_values(array_map('strval', (array) config('smartlinks.collections', [])));
+        return array_values(array_unique(array_map('strval', [
+            ...(array) config('smartlinks.collections', []),
+            ...(array) config('smartlinks.release_collections', []),
+        ])));
+    }
+
+    /**
+     * An entry of a release collection: identified by UPC, linked as album.
+     */
+    public function isRelease(Entry $entry): bool
+    {
+        return in_array($entry->collectionHandle(), array_map('strval', (array) config('smartlinks.release_collections', [])), true);
+    }
+
+    /**
+     * Appends links as new rows, never touching existing ones, and saves.
+     * Writes where the links live: a localisation that inherits them gets
+     * them added on its origin, not a copy that ends inheritance.
+     *
+     * @param  array<int, array{platform: string, url: string}>  $links
+     */
+    public function appendLinks(Entry $entry, array $links): void
+    {
+        if ($links === []) {
+            return;
+        }
+
+        $field = (string) config('smartlinks.field', 'streaming_links');
+        $key = (string) config('smartlinks.url_key', 'url');
+        $platformKey = config('smartlinks.platform_key', 'platform');
+        $asLabel = config('smartlinks.platform_value', 'handle') === 'label';
+
+        $target = $entry;
+        while (! $target->has($field) && $target->origin() instanceof Entry) {
+            $target = $target->origin();
+        }
+
+        $rows = is_array($current = $target->get($field)) ? array_values($current) : [];
+        $isList = $rows !== [] && collect($rows)->every(fn ($row) => is_string($row));
+
+        foreach ($links as $link) {
+            if ($isList) {
+                $rows[] = $link['url'];
+
+                continue;
+            }
+
+            $row = [$key => $link['url']];
+
+            if (is_string($platformKey) && $platformKey !== '') {
+                $row[$platformKey] = $asLabel ? $this->platforms->label($link['platform']) : $link['platform'];
+            }
+
+            $rows[] = $row;
+        }
+
+        $target->set($field, $rows)->save();
     }
 
     public function handles(Entry $entry): bool

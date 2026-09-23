@@ -19,6 +19,18 @@ final class Resolution
 
     public const HTTP_ERROR = 'http_error';
 
+    /** The service asked us to slow down (429, Deezer code 4). */
+    public const RATE_LIMITED = 'rate_limited';
+
+    /** Found, but the service says it is not available in `smartlinks.country`. */
+    public const NOT_AVAILABLE_IN_REGION = 'not_available_in_region';
+
+    /** A candidate came back, but its ISRC, UPC, position or length disagree. */
+    public const MISMATCH = 'mismatch';
+
+    /** A name match: stored as a suggestion for review, never written. */
+    public const SUGGESTED = 'suggested';
+
     public function __construct(
         public readonly string $platform,
         public readonly string $reason,

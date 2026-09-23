@@ -2,18 +2,20 @@
 
 namespace Goldnead\Smartlinks\Resolvers;
 
-use Goldnead\Smartlinks\Contracts\Resolver;
+use Goldnead\Smartlinks\Contracts\SuggestsOnly;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 /**
- * YouTube Data API search, optional (YOUTUBE_API_KEY, free quota).
+ * YouTube Data API search, optional (YOUTUBE_API_KEY, free quota of 100
+ * searches a day).
  *
- * A title search is fuzzy, and a wrong link is worse than none. So only a
- * video from the artist's auto-generated "<Artist> - Topic" channel counts:
- * that is the label's own upload of exactly this recording.
+ * YouTube has no ISRC lookup, so this is a name search: a suggestion only,
+ * never written by itself ({@see SuggestsOnly}). Even as a suggestion only
+ * a video from the artist's auto-generated "<Artist> - Topic" channel
+ * counts: the label's own upload of the recording, not a fan copy.
  */
-class YouTubeResolver implements Resolver
+class YouTubeResolver implements SuggestsOnly
 {
     public const API_URL = 'https://www.googleapis.com/youtube/v3/search';
 

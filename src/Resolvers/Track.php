@@ -3,18 +3,62 @@
 namespace Goldnead\Smartlinks\Resolvers;
 
 /**
- * What the resolvers know about a song. Starts with what the entry holds
- * (a Spotify ID, maybe an ISRC) and is filled in by Spotify's API.
+ * What the resolvers know about a song or a release. Starts with what the
+ * entry holds (a link or ID of any supported service, maybe an ISRC or UPC)
+ * and is filled in by {@see Identifier}: the ISRC identifies a recording,
+ * the UPC its release. Resolvers write only on those, never on a name.
+ *
+ * `$album` is true for an entry of a release collection: then the UPC is
+ * the key and the resolvers look for the album, not a track.
  */
 final class Track
 {
+    /** @var list<string>|null ISO country codes, from Deezer */
+    public ?array $availableCountries = null;
+
+    public ?string $deezerLink = null;
+
+    public ?int $deezerAlbumId = null;
+
+    public ?int $trackNumber = null;
+
+    public ?int $discNumber = null;
+
+    /** Seconds. */
+    public ?int $duration = null;
+
     public function __construct(
         public ?string $spotifyId = null,
         public ?string $isrc = null,
         public ?string $title = null,
         public ?string $artist = null,
+        public ?string $upc = null,
+        public ?string $deezerId = null,
+        public ?string $tidalId = null,
+        public bool $album = false,
     ) {
         $this->isrc = self::normaliseIsrc($isrc);
+        $this->upc = self::normaliseUpc($upc);
+    }
+
+    /**
+     * The key a release is known by: UPC-A (12 digits) or EAN-13, digits only.
+     */
+    public static function normaliseUpc(?string $upc): ?string
+    {
+        $upc = preg_replace('/\D/', '', trim((string) $upc));
+
+        return preg_match('/^\d{12,14}$/', (string) $upc) === 1 ? $upc : null;
+    }
+
+    /**
+     * Whether the track may be linked in `$country`. Unknown availability
+     * counts as available: only a service's explicit list can rule it out.
+     */
+    public function availableIn(string $country): bool
+    {
+        return $this->availableCountries === null
+            || in_array(strtoupper($country), $this->availableCountries, true);
     }
 
     /**

@@ -52,7 +52,7 @@ class Resolve extends Command
                 }
 
                 $rows[] = [
-                    (string) $entry->get('title'),
+                    (string) $entry->value('title'),
                     $resolution->platform,
                     $resolution->successful() ? ($dryRun ? 'would add' : 'added') : $resolution->reason,
                     $resolution->url ?? '',
@@ -60,7 +60,11 @@ class Resolve extends Command
             }
 
             if ($result['enrichment'] !== Resolution::FOUND && $result['enrichment'] !== ResolverChain::ALREADY_PRESENT) {
-                $rows[] = [(string) $entry->get('title'), 'spotify lookup', $result['enrichment'], ''];
+                $rows[] = [(string) $entry->value('title'), 'identify (ISRC/UPC)', $result['enrichment'], ''];
+            }
+
+            foreach ($result['stored'] as $field => $value) {
+                $rows[] = [(string) $entry->value('title'), $field, $dryRun ? 'would store' : 'stored', $value];
             }
         }
 

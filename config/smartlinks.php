@@ -1,7 +1,9 @@
 <?php
 
+use Goldnead\Smartlinks\Resolvers\AppleMusicResolver;
 use Goldnead\Smartlinks\Resolvers\DeezerResolver;
 use Goldnead\Smartlinks\Resolvers\SpotifyResolver;
+use Goldnead\Smartlinks\Resolvers\TidalResolver;
 use Goldnead\Smartlinks\Resolvers\YouTubeResolver;
 
 return [
@@ -161,16 +163,21 @@ return [
     | Auto-fill
     |--------------------------------------------------------------------------
     |
-    | Used by `php artisan smartlinks:resolve`, in this order. Only services
-    | that are free: Spotify's Web API (client credentials), Deezer's public
-    | ISRC lookup (no key), and optionally the YouTube Data API. Apple Music,
-    | Amazon, Tidal and the rest stay hand-entered.
+    | Used by `php artisan smartlinks:resolve`, in this order. Exact matches
+    | only, on the ISRC (songs) or UPC (releases): Spotify (client
+    | credentials), Deezer (free, no key), Apple Music via Deezer's UPC and
+    | the iTunes lookup (free, ~20 calls a minute, paced), Tidal (client
+    | credentials). YouTube can only be searched by name, so its finds are
+    | suggestions to accept in the Control Panel, never written by
+    | themselves. Amazon and the rest stay hand-entered.
     |
     */
 
     'resolvers' => [
         SpotifyResolver::class,
         DeezerResolver::class,
+        AppleMusicResolver::class,
+        TidalResolver::class,
         YouTubeResolver::class,
     ],
 
@@ -178,7 +185,18 @@ return [
         'spotify' => [
             'client_id' => env('SPOTIFY_CLIENT_ID'),
             'client_secret' => env('SPOTIFY_CLIENT_SECRET'),
-            'market' => env('SPOTIFY_MARKET', 'DE'),
+            // Falls back to `country`.
+            'market' => env('SPOTIFY_MARKET'),
+        ],
+        'tidal' => [
+            'client_id' => env('TIDAL_CLIENT_ID'),
+            'client_secret' => env('TIDAL_CLIENT_SECRET'),
+        ],
+        'itunes' => [
+            // Apple documents about 20 calls a minute.
+            'interval_ms' => 3100,
+            // Seconds a track may differ in length from the ISRC's recording.
+            'duration_tolerance' => 10,
         ],
         'youtube' => [
             'key' => env('YOUTUBE_API_KEY'),

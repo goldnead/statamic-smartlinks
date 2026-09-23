@@ -32,6 +32,12 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(Platforms::class, fn () => new Platforms((array) config('smartlinks.platforms', [])));
         $this->app->singleton(Smartlinks::class);
         $this->app->singleton(SpotifyClient::class);
+        $this->app->singleton(Resolvers\DeezerClient::class);
+        $this->app->singleton(Resolvers\TidalClient::class);
+        $this->app->singleton(Resolvers\ItunesClient::class);
+        $this->app->singleton(Resolvers\Identifier::class);
+        $this->app->singleton(LinkCleaner::class);
+        $this->app->singleton(Suggestions::class);
         $this->app->singleton(ResolverChain::class);
 
         // On the resolving translator rather than in boot: nav and permission

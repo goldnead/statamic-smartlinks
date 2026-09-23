@@ -3,9 +3,11 @@
 namespace Goldnead\Smartlinks\Tests;
 
 use Goldnead\Smartlinks\Fieldtypes\SmartlinkUrl;
+use Goldnead\Smartlinks\Resolvers\ItunesClient;
 use Goldnead\Smartlinks\ServiceProvider;
 use Goldnead\Smartlinks\Tags\Smartlinks;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Statamic\Contracts\Entries\Entry as EntryContract;
 use Statamic\Facades\Collection;
 use Statamic\Facades\CP\Nav;
@@ -40,6 +42,7 @@ abstract class TestCase extends AddonTestCase
         // discovery would.
         $provider?->bootEvents();
         Smartlinks::register();
+        ItunesClient::resetPacing();
         SmartlinkUrl::register();
 
         if (! Collection::find('songs')) {
@@ -81,6 +84,11 @@ abstract class TestCase extends AddonTestCase
         $app['config']->set('smartlinks.services.spotify.client_id', null);
         $app['config']->set('smartlinks.services.spotify.client_secret', null);
         $app['config']->set('smartlinks.services.youtube.key', null);
+        $app['config']->set('smartlinks.services.tidal.client_id', null);
+        $app['config']->set('smartlinks.services.tidal.client_secret', null);
+        $app['config']->set('smartlinks.services.itunes.interval_ms', 0);
+        // No test may reach a real service by accident.
+        Http::preventStrayRequests();
     }
 
     /**
@@ -113,6 +121,18 @@ abstract class TestCase extends AddonTestCase
             'prefix' => '',
             'strict' => true,
         ];
+    }
+
+    /**
+     * Blueprints are files, not Stache items: PreventsSavingStacheItemsToDisk
+     * does not stop them. A test that saves one would leak it into every
+     * later test (and into vendor/orchestra), so they go after each test.
+     */
+    protected function tearDown(): void
+    {
+        $this->app['files']->deleteDirectory(resource_path('blueprints'));
+
+        parent::tearDown();
     }
 
     /**

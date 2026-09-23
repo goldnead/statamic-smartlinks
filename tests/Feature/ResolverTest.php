@@ -156,6 +156,9 @@ it('runs the chain: Spotify from the ID, Deezer via the ISRC Spotify returned', 
         ->and(collect($run['results'])->mapWithKeys(fn ($r) => [$r->platform => $r->url ?? $r->reason])->all())->toBe([
             'spotify' => 'https://open.spotify.com/track/'.SPOTIFY_ID,
             'deezer' => 'https://www.deezer.com/track/1069843552',
+            // The Deezer answer carries no album, so no UPC for Apple.
+            'applemusic' => Resolution::MISSING_INPUT,
+            'tidal' => Resolution::NOT_CONFIGURED,
             'youtube' => Resolution::NOT_CONFIGURED,
         ]);
 });
@@ -169,7 +172,8 @@ it('takes the Spotify ID from a stored Spotify link when the ID field is empty, 
     $run = app(ResolverChain::class)->run($song);
 
     expect($track->spotifyId)->toBe(SPOTIFY_ID)
-        ->and($run['enrichment'])->toBe(Resolution::NOT_CONFIGURED)
+        // The ISRC field is enough: identified without asking Spotify.
+        ->and($run['enrichment'])->toBe(Resolution::FOUND)
         ->and($run['results'][0]->reason)->toBe(ResolverChain::ALREADY_PRESENT)
         ->and($run['results'][1]->url)->toBe('https://www.deezer.com/track/9');
 });

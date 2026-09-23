@@ -3,19 +3,16 @@
 namespace Goldnead\Smartlinks\Resolvers;
 
 use Goldnead\Smartlinks\Contracts\Resolver;
-use Goldnead\Smartlinks\Platforms;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\Http;
 
 /**
- * Deezer's public API looks a track up by ISRC, free and without a key.
+ * Deezer by ISRC (track) or UPC (release), free and without a key.
  *
- * A miss is not an HTTP error: Deezer answers 200 with
- * `{"error": {"type": "DataException", "message": "no data", "code": 800}}`.
+ * A track Deezer lists as unavailable in `smartlinks.country` is not linked
+ * (`not_available_in_region`).
  */
 class DeezerResolver implements Resolver
 {
-    public const API_URL = 'https://api.deezer.com';
+    public function __construct(protected DeezerClient $client, protected Identifier $identifier) {}
 
     public function platform(): string
     {
@@ -24,33 +21,32 @@ class DeezerResolver implements Resolver
 
     public function resolve(Track $track): Resolution
     {
-        if ($track->isrc === null) {
+        if ($track->album ? $track->upc === null : $track->isrc === null) {
             return Resolution::none($this->platform(), Resolution::MISSING_INPUT);
         }
 
         try {
-            $response = Http::timeout((int) config('smartlinks.services.timeout', 10))
-                ->acceptJson()
-                ->get(self::API_URL.'/track/isrc:'.$track->isrc);
-        } catch (ConnectionException) {
-            return Resolution::none($this->platform(), Resolution::HTTP_ERROR);
+            if ($track->deezerLink === null) {
+                $reason = $track->album
+                    ? $this->identifier->absorbDeezerAlbum($track, $this->client->album('upc:'.$track->upc))
+                    : $this->identifier->absorbDeezerTrack($track, $this->client->track('isrc:'.$track->isrc));
+
+                if ($reason !== Resolution::FOUND) {
+                    return Resolution::none($this->platform(), $reason);
+                }
+            }
+        } catch (ServiceError $e) {
+            return Resolution::none($this->platform(), $e->reason);
         }
 
-        if (! $response->successful()) {
-            return Resolution::none($this->platform(), Resolution::HTTP_ERROR);
-        }
-
-        if ($response->json('error') !== null) {
+        if ($track->deezerLink === null) {
             return Resolution::none($this->platform(), Resolution::NOT_FOUND);
         }
 
-        $link = $response->json('link');
-
-        // Only a link that really is Deezer's: the answer is data from outside.
-        if (! is_string($link) || app(Platforms::class)->detect($link) !== $this->platform()) {
-            return Resolution::none($this->platform(), Resolution::NOT_FOUND);
+        if (! $track->availableIn((string) config('smartlinks.country', 'DE'))) {
+            return Resolution::none($this->platform(), Resolution::NOT_AVAILABLE_IN_REGION);
         }
 
-        return Resolution::found($this->platform(), $link);
+        return Resolution::found($this->platform(), $track->deezerLink);
     }
 }
