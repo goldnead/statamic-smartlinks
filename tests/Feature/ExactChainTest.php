@@ -164,6 +164,7 @@ it('picks the Apple track by position and checks its length', function () {
         $t->trackNumber = 1;
         $t->discNumber = 1;
         $t->duration = 197;
+        $t->positionUpc = UPC;
     });
 
     Http::fake(['itunes.apple.com/*' => Http::sequence()
@@ -183,6 +184,40 @@ it('picks the Apple track by position and checks its length', function () {
         ->and($apple->resolve($track())->reason)->toBe(Resolution::HTTP_ERROR)
         ->and($apple->resolve($track())->reason)->toBe(Resolution::RATE_LIMITED)
         ->and($apple->resolve(new Track(isrc: ISRC))->reason)->toBe(Resolution::MISSING_INPUT);
+});
+
+it('does not trust a track position that belongs to another release (compilation)', function () {
+    withIdentifierFields();
+    $single = '4250548400001';
+    Http::fake([
+        // Deezer lists the ISRC on a compilation, as track 7.
+        'api.deezer.com/track/isrc:'.ISRC => Http::response(deezerTrack(['track_position' => 7, 'album' => ['id' => 999]])),
+        'api.deezer.com/album/999' => Http::response(['id' => 999, 'upc' => '4250548499999', 'link' => 'https://www.deezer.com/album/999']),
+        // The entry's own release on Apple: an EP where track 7 is another song.
+        'itunes.apple.com/*' => Http::response(['resultCount' => 8, 'results' => [
+            ['wrapperType' => 'collection', 'collectionViewUrl' => 'https://music.apple.com/de/album/ep/1'],
+            ...array_map(fn ($n) => ['wrapperType' => 'track', 'kind' => 'song', 'trackNumber' => $n, 'discNumber' => 1, 'trackTimeMillis' => 197000,
+                'trackViewUrl' => "https://music.apple.com/de/album/ep/1?i={$n}"], range(1, 7)),
+        ]]),
+    ]);
+    $song = $this->makeSong('Alles wird gut', [], ['isrc' => ISRC, 'upc' => $single]);
+
+    $run = app(ResolverChain::class)->run($song);
+
+    expect($run['track']->upc)->toBe($single)
+        ->and($run['track']->positionUpc)->toBe('4250548499999')
+        ->and(collect($run['results'])->firstWhere('platform', 'applemusic')->reason)->toBe(Resolution::NO_CONFIDENT_MATCH);
+});
+
+it('uses the position when it belongs to the entry\'s own release', function () {
+    withIdentifierFields();
+    fakeCatalogue();
+    $song = $this->makeSong('Alles wird gut', [], ['isrc' => ISRC, 'upc' => UPC]);
+
+    $run = app(ResolverChain::class)->run($song);
+
+    expect($run['track']->positionUpc)->toBe(UPC)
+        ->and(collect($run['results'])->firstWhere('platform', 'applemusic')->url)->toBe(APPLE_TRACK);
 });
 
 it('links the Apple album, not a track, for a release', function () {

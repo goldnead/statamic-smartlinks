@@ -20,6 +20,14 @@ final class Track
 
     public ?int $deezerAlbumId = null;
 
+    /**
+     * Track and disc number are positions on one release: the Deezer album
+     * the ISRC lookup landed on, whose UPC this is. They only say something
+     * about another service's copy of the release with the same UPC. A
+     * compilation or a re-release puts the recording elsewhere.
+     */
+    public ?string $positionUpc = null;
+
     public ?int $trackNumber = null;
 
     public ?int $discNumber = null;
@@ -49,6 +57,14 @@ final class Track
         $upc = preg_replace('/\D/', '', trim((string) $upc));
 
         return preg_match('/^\d{12,14}$/', (string) $upc) === 1 ? $upc : null;
+    }
+
+    /**
+     * Whether trackNumber/discNumber refer to the release `$upc` names.
+     */
+    public function positionIsOnRelease(): bool
+    {
+        return $this->trackNumber !== null && $this->upc !== null && $this->positionUpc === $this->upc;
     }
 
     /**

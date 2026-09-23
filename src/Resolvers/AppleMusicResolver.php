@@ -52,11 +52,13 @@ class AppleMusicResolver implements Resolver
             return Resolution::none($this->platform(), Resolution::NOT_FOUND);
         }
 
-        if ($track->trackNumber !== null) {
+        if ($track->positionIsOnRelease()) {
             $candidates = array_values(array_filter($songs, fn (array $song) => (int) ($song['trackNumber'] ?? 0) === $track->trackNumber
                 && ($track->discNumber === null || (int) ($song['discNumber'] ?? 1) === $track->discNumber)));
         } else {
-            // Without a position only a one-track release is unambiguous.
+            // No position on this very release (none known, or Deezer's is on
+            // a compilation or another edition): only a one-track release is
+            // unambiguous.
             $candidates = count($songs) === 1 ? $songs : [];
         }
 

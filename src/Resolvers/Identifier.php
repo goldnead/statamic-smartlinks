@@ -146,11 +146,15 @@ class Identifier
             $attempt(fn () => $this->absorbDeezerTrack($track, $this->deezer->track('isrc:'.$track->isrc)));
         }
 
-        if ($track->upc === null && $track->deezerAlbumId !== null) {
+        // The UPC of the Deezer album the position belongs to. Without an
+        // own UPC the entry takes it; with one, the position only counts when
+        // both agree (see Track::positionIsOnRelease()).
+        if ($track->deezerAlbumId !== null && $track->positionUpc === null) {
             $attempt(function () use ($track) {
-                $track->upc = Track::normaliseUpc($this->string(data_get($this->deezer->album((string) $track->deezerAlbumId), 'upc')));
+                $track->positionUpc = Track::normaliseUpc($this->string(data_get($this->deezer->album((string) $track->deezerAlbumId), 'upc')));
+                $track->upc ??= $track->positionUpc;
 
-                return $track->upc === null ? Resolution::NOT_FOUND : Resolution::FOUND;
+                return $track->positionUpc === null ? Resolution::NOT_FOUND : Resolution::FOUND;
             });
         }
 
@@ -200,7 +204,13 @@ class Identifier
         $track->deezerId ??= isset($data['id']) ? (string) $data['id'] : null;
         $link = $this->string($data['link'] ?? null);
         $track->deezerLink = $link !== null && app(Platforms::class)->detect($link) === 'deezer' ? $link : null;
-        $track->deezerAlbumId = is_numeric(data_get($data, 'album.id')) ? (int) data_get($data, 'album.id') : $track->deezerAlbumId;
+        if (is_numeric(data_get($data, 'album.id'))) {
+            // A new album: its UPC has to be looked up again.
+            if ($track->deezerAlbumId !== (int) data_get($data, 'album.id')) {
+                $track->positionUpc = null;
+            }
+            $track->deezerAlbumId = (int) data_get($data, 'album.id');
+        }
         $track->trackNumber = is_numeric($data['track_position'] ?? null) ? (int) $data['track_position'] : $track->trackNumber;
         $track->discNumber = is_numeric($data['disk_number'] ?? null) ? (int) $data['disk_number'] : $track->discNumber;
         $track->duration = is_numeric($data['duration'] ?? null) ? (int) $data['duration'] : $track->duration;
