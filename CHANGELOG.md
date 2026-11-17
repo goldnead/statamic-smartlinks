@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 (2026-11-17)
+
+### Changed
+- The Control Panel bundle is rebuilt against the current `statamic/cms`, so the CP page keeps working with it.
+- The package download no longer contains `art/` (`export-ignore`). No code change, no migration, no new config key.
+
 ## 0.2.1 (2026-09-23)
 
 ### Fixed
