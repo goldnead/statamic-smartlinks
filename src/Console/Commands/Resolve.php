@@ -41,20 +41,30 @@ class Resolve extends Command
 
         $rows = [];
         $addedTotal = 0;
+        $errors = 0;
 
         foreach ($entries as $entry) {
             /** @var Entry $entry */
             $result = $chain->fill($entry, $dryRun, (bool) $this->option('replace-dead'));
             $addedTotal += count($result['added']);
-            $replacedPlatforms = array_column($result['replaced'], 'platform');
+            $replacedPlatforms = array_column([...$result['replaced'], ...$result['failed']], 'platform');
 
             foreach ($result['replaced'] as $replacement) {
                 $rows[] = [(string) $entry->value('title'), $replacement['platform'], $dryRun ? 'would replace' : 'replaced', $replacement['old'].' → '.$replacement['new']];
             }
 
+            foreach ($result['failed'] as $replacement) {
+                $errors++;
+                $rows[] = [(string) $entry->value('title'), $replacement['platform'], 'save_failed', $replacement['old'].' → '.$replacement['new']];
+            }
+
             foreach ($result['results'] as $resolution) {
                 if ($resolution->reason === ResolverChain::ALREADY_PRESENT || ($resolution->successful() && in_array($resolution->platform, $replacedPlatforms, true))) {
                     continue;
+                }
+
+                if ($resolution->reason === Resolution::HTTP_ERROR) {
+                    $errors++;
                 }
 
                 $rows[] = [
@@ -85,6 +95,12 @@ class Resolve extends Command
             $entries->count(),
             $dryRun ? ' Dry run: nothing saved.' : '',
         ));
+
+        if ($errors > 0) {
+            $this->components->error("{$errors} error(s): links not saved or services failed, see the table above.");
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

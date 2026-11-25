@@ -181,7 +181,10 @@ class ResolverChain
      * confirmed dead goes into that dead link's row (other columns kept)
      * instead of a new one, and the dead link's check history is dropped.
      *
-     * @return array{enrichment: string, track: Track, results: list<Resolution>, dead: array<string, string>, added: list<Resolution>, replaced: list<array{platform: string, old: string, new: string}>, suggested: list<Resolution>, stored: array<string, string>}
+     * `replaced` holds only the replacements that were saved; `failed` those
+     * whose save was cancelled, nothing changed for them.
+     *
+     * @return array{enrichment: string, track: Track, results: list<Resolution>, dead: array<string, string>, added: list<Resolution>, replaced: list<array{platform: string, old: string, new: string}>, failed: list<array{platform: string, old: string, new: string}>, suggested: list<Resolution>, stored: array<string, string>}
      */
     public function fill(Entry $entry, bool $dryRun = false, bool $replaceDead = false): array
     {
@@ -210,34 +213,53 @@ class ResolverChain
             Log::info('smartlinks: replaced dead link', ['entry' => $entry->id(), ...$replacement, 'dry_run' => $dryRun]);
         }
 
-        $result = [...$run, 'added' => $added, 'replaced' => $replaced, 'suggested' => $suggested, 'stored' => $stored];
+        $result = [...$run, 'added' => $added, 'replaced' => $replaced, 'failed' => [], 'suggested' => $suggested, 'stored' => $stored];
 
         if ($dryRun) {
             return $result;
         }
 
+        $replacedOk = [];
+        $replacedFailed = [];
+
         foreach ($replaced as $replacement) {
-            $this->smartlinks->replaceLink($entry, $replacement['old'], $replacement['new']);
+            if ($this->smartlinks->replaceLink($entry, $replacement['old'], $replacement['new'])) {
+                $replacedOk[] = $replacement;
+            } else {
+                $replacedFailed[] = $replacement;
+            }
         }
 
-        if ($replaced !== []) {
+        if ($replacedOk !== []) {
             app(LinkStatus::class)->sync((string) $entry->id(), [], $this->smartlinks->storedUrls($entry));
         }
+
+        $result['replaced'] = $replacedOk;
+        $result['failed'] = $replacedFailed;
 
         foreach ($suggested as $suggestion) {
             $this->suggestions->add((string) $entry->id(), $suggestion->platform, (string) $suggestion->url);
         }
 
-        foreach ($stored as $field => $value) {
-            $entry->set($field, $value);
-        }
-
         // appendLinks saves the entry that holds the links, which for a
         // localisation is its origin; the identifiers sit on the entry itself.
-        $this->smartlinks->appendLinks($entry, array_map(fn (Resolution $r) => ['platform' => $r->platform, 'url' => (string) $r->url], $added));
+        $appended = $this->smartlinks->appendLinks($entry, array_map(fn (Resolution $r) => ['platform' => $r->platform, 'url' => (string) $r->url], $added));
+
+        if (! $appended) {
+            // Nothing was written: the links do not count as added.
+            $result['failed'] = [...$result['failed'], ...array_map(fn (Resolution $r) => ['platform' => $r->platform, 'new' => (string) $r->url, 'old' => '', 'reason' => 'save_failed'], $added)];
+            $result['added'] = [];
+            $added = [];
+        }
 
         if ($stored !== []) {
-            $entry->save();
+            foreach ($stored as $field => $value) {
+                $entry->set($field, $value);
+            }
+
+            if (! $entry->save()) {
+                $result['stored'] = [];
+            }
         }
 
         return $result;
