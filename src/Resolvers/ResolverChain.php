@@ -151,7 +151,13 @@ class ResolverChain
             try {
                 $result = $resolver->resolve($track);
             } catch (Throwable $e) {
-                Log::warning('smartlinks: resolver failed', ['platform' => $platform, 'reason' => Resolution::HTTP_ERROR, 'error' => $e->getMessage()]);
+                Log::warning('smartlinks: resolver failed', [
+                    'platform' => $platform,
+                    'reason' => Resolution::HTTP_ERROR,
+                    'error' => $e->getMessage(),
+                    'exception' => $e::class,
+                    'entry_id' => $entryId,
+                ]);
                 $result = Resolution::none($platform, Resolution::HTTP_ERROR);
             }
 
