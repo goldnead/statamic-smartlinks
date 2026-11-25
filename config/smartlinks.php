@@ -238,6 +238,8 @@ return [
     'cp' => [
         'enabled' => true,
         'days' => 30,
+        // The song list is cut at this many songs; the screen reports it.
+        'limit' => 2000,
     ],
 
 ];
