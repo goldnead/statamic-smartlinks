@@ -87,3 +87,16 @@ it('keeps the status of a URL that appears twice exactly', function () {
     expect(Entry::find($song->id())->get('streaming_links'))->toHaveCount(1)
         ->and(app(LinkStatus::class)->dead((string) $song->id()))->toBe([$url]);
 });
+
+it('does not report an added link whose save failed, and exits with failure', function () {
+    $song = $this->makeSong('Neu', [['platform' => 'deezer', 'link_type' => 'Song', 'url' => 'https://www.deezer.com/track/1']]);
+
+    cancelSaves();
+
+    $this->artisan('smartlinks:resolve', ['entry' => $song->id()])
+        ->expectsOutputToContain('save_failed')
+        ->assertFailed();
+
+    $urls = collect(Entry::find($song->id())->get('streaming_links'))->pluck('url')->all();
+    expect($urls)->toBe(['https://www.deezer.com/track/1']);
+});

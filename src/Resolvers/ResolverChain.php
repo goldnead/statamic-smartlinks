@@ -241,16 +241,25 @@ class ResolverChain
             $this->suggestions->add((string) $entry->id(), $suggestion->platform, (string) $suggestion->url);
         }
 
-        foreach ($stored as $field => $value) {
-            $entry->set($field, $value);
-        }
-
         // appendLinks saves the entry that holds the links, which for a
         // localisation is its origin; the identifiers sit on the entry itself.
-        $this->smartlinks->appendLinks($entry, array_map(fn (Resolution $r) => ['platform' => $r->platform, 'url' => (string) $r->url], $added));
+        $appended = $this->smartlinks->appendLinks($entry, array_map(fn (Resolution $r) => ['platform' => $r->platform, 'url' => (string) $r->url], $added));
+
+        if (! $appended) {
+            // Nothing was written: the links do not count as added.
+            $result['failed'] = [...$result['failed'], ...array_map(fn (Resolution $r) => ['platform' => $r->platform, 'new' => (string) $r->url, 'old' => '', 'reason' => 'save_failed'], $added)];
+            $result['added'] = [];
+            $added = [];
+        }
 
         if ($stored !== []) {
-            $entry->save();
+            foreach ($stored as $field => $value) {
+                $entry->set($field, $value);
+            }
+
+            if (! $entry->save()) {
+                $result['stored'] = [];
+            }
         }
 
         return $result;

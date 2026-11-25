@@ -112,7 +112,8 @@ class Smartlinks
             $target = $target->origin();
         }
 
-        $rows = is_array($current = $target->get($field)) ? array_values($current) : [];
+        $before = $target->get($field);
+        $rows = is_array($before) ? array_values($before) : [];
         $isList = $rows !== [] && collect($rows)->every(fn ($row) => is_string($row));
 
         foreach ($links as $link) {
@@ -131,7 +132,15 @@ class Smartlinks
             $rows[] = $row;
         }
 
-        return (bool) $target->set($field, $rows)->save();
+        if ($target->set($field, $rows)->save()) {
+            return true;
+        }
+
+        // Not saved: the in-memory entry goes back, or the next save of the
+        // same entry would write the links that were refused.
+        $target->set($field, $before);
+
+        return false;
     }
 
     public function handles(Entry $entry): bool
