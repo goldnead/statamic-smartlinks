@@ -26,6 +26,7 @@ class Clean extends Command
         $key = (string) config('smartlinks.url_key', 'url');
         $urls = 0;
         $songs = 0;
+        $failed = 0;
 
         $entries = $smartlinks->collections() === []
             ? collect()
@@ -44,22 +45,34 @@ class Clean extends Command
                 continue;
             }
 
-            $urls += $changed;
-            $songs++;
-
-            if ($this->output->isVerbose() || $dryRun) {
-                $this->line((string) $entry->value('title').": {$changed} URL(s)");
-            }
+            $title = (string) $entry->value('title');
 
             if (! $dryRun) {
-                $entry->set($field, $rows)->saveQuietly();
+                if (! $entry->set($field, $rows)->saveQuietly()) {
+                    $failed++;
+                    $this->error("{$title}: not saved, its {$changed} URL(s) stay as they were.");
+
+                    continue;
+                }
+
                 $statuses->sync((string) $entry->id(), $renamed, $smartlinks->storedUrls($entry));
             }
+
+            $urls += $changed;
+            $songs++;
+            $this->line("{$title}: {$changed} URL(s)");
         }
 
         $this->components->info($dryRun
             ? "{$urls} URL(s) in {$songs} song(s) would be cleaned. Dry run: nothing saved."
             : "{$urls} URL(s) in {$songs} song(s) cleaned.");
+        $this->line('Checked '.$entries->count()." entries, {$songs} changed.");
+
+        if ($failed > 0) {
+            $this->components->error("{$failed} song(s) could not be saved.");
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

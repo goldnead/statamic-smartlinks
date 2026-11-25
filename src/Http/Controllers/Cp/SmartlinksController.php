@@ -135,7 +135,14 @@ class SmartlinksController extends CpController
         $pending = Schema::hasTable(Suggestions::TABLE) ? collect(app(Suggestions::class)->pending())->groupBy('entry_id') : collect();
         $canManage = Gate::allows('manage smartlinks');
 
-        $rows = $this->entries($smartlinks)->map(function (Entry $entry) use ($clicks, $platforms, $smartlinks, $dead, $pending, $canManage) {
+        $entries = $this->entries($smartlinks);
+        $truncated = $entries->count() > $this->limit();
+
+        if ($truncated) {
+            Log::warning('statamic-smartlinks: the song list is cut at '.$this->limit().' songs; the rest is not listed.');
+        }
+
+        $rows = $entries->take($this->limit())->map(function (Entry $entry) use ($clicks, $platforms, $smartlinks, $dead, $pending, $canManage) {
             $id = (string) $entry->id();
             $counts = $clicks[$id] ?? [];
             $suggestions = $pending->get($id, collect())->map(fn (object $s) => [
@@ -210,6 +217,7 @@ class SmartlinksController extends CpController
                 'from' => $paginator->firstItem(),
                 'to' => $paginator->lastItem(),
                 'total' => $paginator->total(),
+                'truncated' => $truncated,
             ],
         ]);
     }
@@ -241,9 +249,15 @@ class SmartlinksController extends CpController
     {
         $collections = $smartlinks->collections();
 
+        // One row more than the limit, so the caller can tell a cut list from a full one.
         return $collections === []
             ? collect()
-            : Entries::query()->whereIn('collection', $collections)->limit(self::LIMIT)->get();
+            : Entries::query()->whereIn('collection', $collections)->limit($this->limit() + 1)->get();
+    }
+
+    protected function limit(): int
+    {
+        return max(1, (int) config('smartlinks.cp.limit', self::LIMIT));
     }
 
     /**
