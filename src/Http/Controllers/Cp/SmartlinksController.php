@@ -94,7 +94,12 @@ class SmartlinksController extends CpController
                 ->with('success', __('smartlinks::cp.superseded', ['platform' => $label]));
         }
 
-        $smartlinks->appendLinks($entry, [['platform' => (string) $row->platform, 'url' => (string) $row->url]]);
+        // A cancelled save means no link: the suggestion stays pending.
+        if (! $smartlinks->appendLinks($entry, [['platform' => (string) $row->platform, 'url' => (string) $row->url]])) {
+            return redirect()->to(cp_route('smartlinks.index'))
+                ->with('error', __('smartlinks::cp.save_failed', ['platform' => $label]));
+        }
+
         $suggestions->mark($suggestion, Suggestions::ACCEPTED);
 
         return redirect()->to(cp_route('smartlinks.index'))

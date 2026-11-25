@@ -66,14 +66,22 @@ class Smartlinks
             return false;
         }
 
+        $stored = $rows;
+
         foreach ($rows as $i => $row) {
             $url = is_array($row) ? ($row[$key] ?? null) : $row;
 
             if (is_string($url) && trim($url) === $old) {
                 is_array($row) ? $rows[$i][$key] = $new : $rows[$i] = $new;
-                $target->set($field, $rows)->save();
 
-                return true;
+                if ($target->set($field, $rows)->save()) {
+                    return true;
+                }
+
+                // Not saved: the in-memory entry goes back, or the next save would write the new link.
+                $target->set($field, $stored);
+
+                return false;
             }
         }
 
@@ -86,11 +94,12 @@ class Smartlinks
      * them added on its origin, not a copy that ends inheritance.
      *
      * @param  array<int, array{platform: string, url: string}>  $links
+     * @return bool whether the entry was saved (false when a listener cancelled the save)
      */
-    public function appendLinks(Entry $entry, array $links): void
+    public function appendLinks(Entry $entry, array $links): bool
     {
         if ($links === []) {
-            return;
+            return true;
         }
 
         $field = (string) config('smartlinks.field', 'streaming_links');
@@ -122,7 +131,7 @@ class Smartlinks
             $rows[] = $row;
         }
 
-        $target->set($field, $rows)->save();
+        return (bool) $target->set($field, $rows)->save();
     }
 
     public function handles(Entry $entry): bool

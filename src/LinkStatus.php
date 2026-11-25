@@ -85,6 +85,11 @@ class LinkStatus
         }
 
         foreach ($renamed as $old => $new) {
+            // An exact duplicate row maps a URL to itself: its history stays.
+            if ($old === $new) {
+                continue;
+            }
+
             $exists = DB::table(self::TABLE)->where('entry_id', $entryId)->where('url_hash', hash('sha256', $new))->exists();
             $query = DB::table(self::TABLE)->where('entry_id', $entryId)->where('url_hash', hash('sha256', $old));
 

@@ -33,4 +33,5 @@ return [
     'accepted' => ':platform link added.',
     'rejected' => 'Suggestion rejected.',
     'superseded' => ':platform already has a link; suggestion dropped.',
+    'save_failed' => ':platform link not saved; suggestion stays open.',
 ];

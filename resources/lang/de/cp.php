@@ -33,4 +33,5 @@ return [
     'accepted' => ':platform-Link übernommen.',
     'rejected' => 'Vorschlag abgelehnt.',
     'superseded' => ':platform hat schon einen Link; Vorschlag verworfen.',
+    'save_failed' => ':platform-Link nicht gespeichert; Vorschlag bleibt offen.',
 ];
